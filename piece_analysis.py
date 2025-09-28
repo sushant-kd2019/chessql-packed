@@ -328,10 +328,18 @@ class ChessPieceAnalyzer:
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
                         if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
-                            # lecorvus captured opponent's queen, so this is not a sacrifice
+                            # lecorvus captured opponent's queen soon after, so this is not a sacrifice
                             return False
             
-            # If we get here, lecorvus didn't capture opponent's queen, so this is a sacrifice
+            # Also check if lecorvus captured opponent's queen before this move
+            for check_move in range(1, move_num):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
+                            # lecorvus already captured opponent's queen earlier, so this is not a sacrifice
+                            return False
+            
+            # If we get here, lecorvus didn't capture opponent's queen before or soon after, so this is a sacrifice
             return True
         
         return False
