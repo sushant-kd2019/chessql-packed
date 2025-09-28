@@ -32,26 +32,76 @@ class ChessQueryLanguage:
         return self.db.execute_sql_query(query)
     
     def _has_capture_condition(self, query: str) -> bool:
-        """Check if SQL query contains enhanced capture conditions."""
+        """Check if SQL query contains capture conditions."""
         import re
         
         # Look for patterns like "(queen captured queen)", "(knight captured rook)", etc.
-        enhanced_capture_patterns = [
+        capture_patterns = [
             r'\([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+captured\s+(pawn|bishop|knight|rook|queen|king)',
             r'\([^)]*\b(captured|took)\s+(pawn|bishop|knight|rook|queen|king)\s+with\s+(pawn|bishop|knight|rook|queen|king)',
+            r'\([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
+            r'\([^)]*\b(exchanged|sacrificed)\s+(pawn|bishop|knight|rook|queen|king)',
         ]
         
-        for pattern in enhanced_capture_patterns:
+        for pattern in capture_patterns:
             if re.search(pattern, query, re.IGNORECASE):
                 return True
         
         return False
     
     def _handle_sql_with_captures(self, query: str) -> List[Dict[str, Any]]:
-        """Handle SQL queries that contain enhanced capture conditions."""
+        """Handle SQL queries that contain capture conditions."""
         import re
         
-        # Extract the capture condition
+        # Check for exchange/sacrifice patterns first
+        exchange_match = re.search(
+            r'\(([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)[^)]*)\)',
+            query, re.IGNORECASE
+        )
+        
+        if exchange_match:
+            condition = exchange_match.group(1)
+            piece = self._extract_piece_from_query(condition)
+            event_type = self._extract_exchange_type_from_query(condition)
+            move_condition = self._extract_move_condition_from_query(condition)
+            
+            if not piece or not event_type:
+                return []
+            
+            # Build the SQL query for exchanges/sacrifices
+            move_clause = ""
+            if move_condition:
+                if move_condition['type'] == 'before':
+                    move_clause = f"AND c.move_number <= {move_condition['move']}"
+                elif move_condition['type'] == 'after':
+                    move_clause = f"AND c.move_number >= {move_condition['move']}"
+            
+            if event_type == 'exchanged':
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.capturing_piece = '{piece.upper()}' 
+                        AND c.is_exchange = 1
+                        {move_clause}
+                    )
+                """
+            else:  # sacrificed
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.capturing_piece = '{piece.upper()}' 
+                        AND c.is_sacrifice = 1
+                        {move_clause}
+                    )
+                """
+            
+            # Replace the condition with the subquery
+            modified_query = query.replace(exchange_match.group(0), subquery)
+            return self.db.execute_sql_query(modified_query)
+        
+        # Handle specific piece capture patterns
         capture_match = re.search(
             r'\(([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+captured\s+(pawn|bishop|knight|rook|queen|king)[^)]*)\)',
             query, re.IGNORECASE
@@ -115,6 +165,17 @@ class ChessQueryLanguage:
         for piece_name, piece_symbol in piece_mapping.items():
             if piece_name in query_lower:
                 return piece_symbol
+        
+        return None
+    
+    def _extract_exchange_type_from_query(self, query: str) -> str:
+        """Extract exchange type from query (exchanged or sacrificed)."""
+        query_lower = query.lower()
+        
+        if 'exchanged' in query_lower:
+            return 'exchanged'
+        elif 'sacrificed' in query_lower:
+            return 'sacrificed'
         
         return None
     
@@ -188,6 +249,12 @@ class ChessQueryLanguage:
             'SELECT black_player FROM games WHERE (knight captured rook)',
             'SELECT COUNT(*) FROM games WHERE (bishop captured bishop)',
             'SELECT * FROM games WHERE (pawn captured queen)',
+            
+            # Exchange and sacrifice queries
+            'SELECT white_player FROM games WHERE (queen exchanged)',
+            'SELECT black_player FROM games WHERE (knight sacrificed)',
+            'SELECT COUNT(*) FROM games WHERE (pawn exchanged before move 10)',
+            'SELECT * FROM games WHERE (rook sacrificed after move 15)',
             
             # Capture queries with move numbers
             'SELECT white_player FROM games WHERE (queen captured bishop before move 20)',
