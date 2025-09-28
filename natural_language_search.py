@@ -55,6 +55,8 @@ EXAMPLES:
 - "Show me games where lecorvus won" → SELECT * FROM games WHERE (lecorvus won)
 - "Find games where queen was sacrificed" → SELECT * FROM games WHERE (queen sacrificed)
 - "How many games did lecorvus sacrifice his queen" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
+- "How many games did lecorvus sacrifice his queen and win" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'win' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND g.black_result = 'win' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
+- "How many games did lecorvus sacrifice his queen and lose" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'loss' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND g.black_result = 'loss' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
 - "Show lecorvus wins with queen sacrifices" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
 - "Find pawn exchanges before move 10" → SELECT * FROM games WHERE (pawn exchanged before move 10)
 - "Show games sorted by ELO rating" → SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC
