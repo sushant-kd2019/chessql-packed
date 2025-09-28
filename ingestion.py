@@ -125,17 +125,12 @@ class PGNIngestion:
                 print(f"  Game has {moves_length} characters of moves")
                 game_id = self.db.insert_game(game)
                 
-                # Analyze piece events
-                events = self.piece_analyzer.find_piece_events(
-                    game.get('moves', ''),
-                    event_type=None,  # Get all events
-                    piece=None,       # All pieces
-                    max_move=None     # All moves
-                )
+                # Analyze captures with position tracking
+                captures = self.piece_analyzer.analyze_captures(game.get('moves', ''))
                 
-                if events:
-                    self.db.insert_events(game_id, events)
-                    print(f"    Found {len(events)} piece events")
+                if captures:
+                    self.db.insert_captures(game_id, captures)
+                    print(f"    Found {len(captures)} captures with position data")
                 
                 ingested_count += 1
                 print(f"  Ingested game {ingested_count}: {game.get('white_player', 'Unknown')} vs {game.get('black_player', 'Unknown')}")

@@ -46,18 +46,22 @@ class ChessDatabase:
                 )
             """)
             
-            # Create events table for piece analysis
+            # Create captures table for detailed capture information
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS events (
+                CREATE TABLE IF NOT EXISTS captures (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     game_id INTEGER,
                     move_number INTEGER,
-                    event_type TEXT NOT NULL,
-                    piece TEXT NOT NULL,
-                    piece_name TEXT,
+                    side TEXT NOT NULL,
+                    capturing_piece TEXT NOT NULL,
+                    captured_piece TEXT NOT NULL,
+                    from_square TEXT,
+                    to_square TEXT,
+                    move_notation TEXT,
                     piece_value INTEGER,
-                    move TEXT,
-                    side TEXT,
+                    captured_value INTEGER,
+                    is_exchange BOOLEAN,
+                    is_sacrifice BOOLEAN,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (game_id) REFERENCES games (id)
                 )
@@ -107,30 +111,35 @@ class ChessDatabase:
             conn.commit()
             return game_id
     
-    def insert_events(self, game_id: int, events: List[Dict[str, Any]]) -> int:
-        """Insert piece events for a game."""
+    def insert_captures(self, game_id: int, captures: List[Dict[str, Any]]) -> int:
+        """Insert detailed capture information for a game."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            for event in events:
+            for capture in captures:
                 cursor.execute("""
-                    INSERT INTO events (
-                        game_id, move_number, event_type, piece, piece_name,
-                        piece_value, move, side
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO captures (
+                        game_id, move_number, side, capturing_piece, captured_piece,
+                        from_square, to_square, move_notation, piece_value, captured_value,
+                        is_exchange, is_sacrifice
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     game_id,
-                    event.get('move_number', 0),
-                    event.get('event_type', ''),
-                    event.get('piece', ''),
-                    event.get('piece_name', ''),
-                    event.get('piece_value', 0),
-                    event.get('move', ''),
-                    event.get('side', '')
+                    capture.get('move_number', 0),
+                    capture.get('side', ''),
+                    capture.get('capturing_piece', ''),
+                    capture.get('captured_piece', ''),
+                    capture.get('from_square', ''),
+                    capture.get('to_square', ''),
+                    capture.get('move_notation', ''),
+                    capture.get('piece_value', 0),
+                    capture.get('captured_value', 0),
+                    capture.get('is_exchange', False),
+                    capture.get('is_sacrifice', False)
                 ))
             
             conn.commit()
-            return len(events)
+            return len(captures)
     
     def search_moves(self, pattern: str) -> List[Dict[str, Any]]:
         """Search moves using pattern (converted to LIKE for SQLite)."""
@@ -141,62 +150,6 @@ class ChessDatabase:
             # Convert regex-like pattern to SQL LIKE pattern
             like_pattern = pattern.replace('.*', '%').replace('.', '_')
             cursor.execute("SELECT * FROM games WHERE moves LIKE ?", (f"%{like_pattern}%",))
-            rows = cursor.fetchall()
-            
-            return [dict(row) for row in rows]
-    
-    def find_piece_events(self, piece: str = None, event_type: str = None, 
-                         max_move: int = None) -> List[Dict[str, Any]]:
-        """Find games with specific piece events."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            query = """
-                SELECT g.*, e.move_number, e.event_type, e.piece, e.piece_name, 
-                       e.piece_value, e.move, e.side
-                FROM games g
-                JOIN events e ON g.id = e.game_id
-                WHERE 1=1
-            """
-            params = []
-            
-            if piece:
-                query += " AND e.piece = ?"
-                params.append(piece.upper())
-            
-            if event_type:
-                query += " AND e.event_type = ?"
-                params.append(event_type)
-            
-            if max_move:
-                query += " AND e.move_number <= ?"
-                params.append(max_move)
-            
-            query += " ORDER BY g.id, e.move_number"
-            
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            
-            return [dict(row) for row in rows]
-    
-    def find_games_without_piece_exchange(self, piece: str) -> List[Dict[str, Any]]:
-        """Find games where a specific piece was never exchanged."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            query = """
-                SELECT g.*
-                FROM games g
-                WHERE g.id NOT IN (
-                    SELECT DISTINCT e.game_id
-                    FROM events e
-                    WHERE e.piece = ? AND e.event_type = 'piece_exchange'
-                )
-            """
-            
-            cursor.execute(query, (piece.upper(),))
             rows = cursor.fetchall()
             
             return [dict(row) for row in rows]
