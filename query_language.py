@@ -405,12 +405,18 @@ class ChessQueryLanguage:
             'SELECT COUNT(*) FROM games WHERE (lecorvus lost)',
             'SELECT * FROM games WHERE (lecorvus drew)',
             'SELECT white_player FROM games WHERE (lecorvus won) AND (queen sacrificed)',
-            'SELECT '
+            
+            # Sorting queries
+            'SELECT white_player, black_player, result FROM games ORDER BY white_player',
+            'SELECT white_player, black_player, white_elo FROM games ORDER BY CAST(white_elo AS INTEGER) DESC',
+            'SELECT white_player, black_player, date_played FROM games ORDER BY date_played DESC',
+            'SELECT white_player, COUNT(*) as games FROM games GROUP BY white_player ORDER BY games DESC',
+            'SELECT white_player, black_player FROM games WHERE (lecorvus won) ORDER BY date_played DESC',
             
             # Capture queries with move numbers
             'SELECT white_player FROM games WHERE (queen captured bishop before move 20)',
             'SELECT black_player FROM games WHERE (knight captured pawn after move 10)',
             'SELECT COUNT(*) FROM games WHERE (bishop captured bishop before move 15)',
             'SELECT * FROM games WHERE (pawn captured queen after move 5)',
-            'SELECT COUNT(*) FROM games WHERE ("lecorvus" won) AND (queen sacrificed);'
+            'SELECT COUNT(*) FROM games WHERE ("lecorvus" won) AND (queen sacrificed)'
         ]

@@ -130,6 +130,8 @@ def examples(ctx):
     click.echo("=" * 50)
     click.echo("SQL queries: Use standard SQL syntax for metadata")
     click.echo("Regex queries: Use /pattern/ syntax for moves")
+    click.echo("Sorting: Add ORDER BY column [ASC/DESC] to any SQL query")
+    click.echo("Combined: Use AND/OR with player results and piece events")
 
 
 @cli.command()
@@ -224,6 +226,8 @@ Available Commands:
 Query Types:
   - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
   - Pattern queries: /e4/ (for moves matching pattern)
+  - Sorting: Add ORDER BY column [ASC/DESC] to any SQL query
+  - Combined: Use AND/OR with player results and piece events
 """)
 
 
