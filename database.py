@@ -42,6 +42,8 @@ class ChessDatabase:
                     black_elo TEXT,
                     variant TEXT,
                     termination TEXT,
+                    white_result TEXT,
+                    black_result TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -82,12 +84,17 @@ class ChessDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            # Calculate player results
+            result = pgn_data.get('result', '')
+            white_result = self._calculate_player_result(result, 'white')
+            black_result = self._calculate_player_result(result, 'black')
+            
             cursor.execute("""
                 INSERT INTO games (
                     pgn_text, moves, white_player, black_player, result, date_played,
                     event, site, round, eco_code, opening, time_control,
-                    white_elo, black_elo, variant, termination
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    white_elo, black_elo, variant, termination, white_result, black_result
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 pgn_data.get('pgn_text', ''),
                 pgn_data.get('moves', ''),
@@ -104,12 +111,25 @@ class ChessDatabase:
                 pgn_data.get('white_elo', ''),
                 pgn_data.get('black_elo', ''),
                 pgn_data.get('variant', ''),
-                pgn_data.get('termination', '')
+                pgn_data.get('termination', ''),
+                white_result,
+                black_result
             ))
             
             game_id = cursor.lastrowid
             conn.commit()
             return game_id
+    
+    def _calculate_player_result(self, result: str, player_color: str) -> str:
+        """Calculate the result for a specific player (win/loss/draw)."""
+        if result == '1-0':
+            return 'win' if player_color == 'white' else 'loss'
+        elif result == '0-1':
+            return 'loss' if player_color == 'white' else 'win'
+        elif result == '1/2-1/2':
+            return 'draw'
+        else:
+            return 'unknown'
     
     def insert_captures(self, game_id: int, captures: List[Dict[str, Any]]) -> int:
         """Insert detailed capture information for a game."""
