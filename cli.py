@@ -1,6 +1,6 @@
 """
 Chess PGN Database CLI Interface
-Command-line interface for interacting with the chess database and query language.
+Simplified CLI for SQL queries on metadata and regex queries on moves.
 """
 
 import click
@@ -9,16 +9,20 @@ import json
 from typing import List, Dict, Any
 from database import ChessDatabase
 from ingestion import PGNIngestion
-from query_language import ChessQueryLanguage, QueryBuilder
+from query_language import ChessQueryLanguage
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option('--db', default='chess_games.db', help='Database file path')
 @click.pass_context
 def cli(ctx, db):
     """ChessQL - Chess PGN Database Query Language CLI"""
     ctx.ensure_object(dict)
     ctx.obj['db_path'] = db
+    
+    # If no command provided, start interactive mode
+    if ctx.invoked_subcommand is None:
+        _start_interactive_mode(ctx)
 
 
 @cli.command()
@@ -50,10 +54,15 @@ def ingest(ctx, input_path, pattern):
 @click.option('--format', 'output_format', default='table', 
               type=click.Choice(['table', 'json', 'csv']), 
               help='Output format')
-@click.option('--limit', default=10, help='Maximum number of results')
+@click.option('--limit', default=100, help='Maximum number of results')
 @click.pass_context
 def query(ctx, query, output_format, limit):
-    """Execute a query against the chess database."""
+    """Execute a query against the chess database.
+    
+    Query types:
+    - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
+    - Regex queries: /e4.*c5/ (for moves matching pattern)
+    """
     db_path = ctx.obj['db_path']
     
     if not os.path.exists(db_path):
@@ -117,18 +126,52 @@ def examples(ctx):
     for i, example in enumerate(examples, 1):
         click.echo(f"{i}. {example}")
     
-    click.echo("\nAvailable Fields:")
+    click.echo("\nQuery Types:")
     click.echo("=" * 50)
-    fields = query_lang.get_available_fields()
-    for field in fields:
-        click.echo(f"  - {field}")
+    click.echo("SQL queries: Use standard SQL syntax for metadata")
+    click.echo("Regex queries: Use /pattern/ syntax for moves")
 
 
 @cli.command()
-@click.option('--interactive', '-i', is_flag=True, help='Start interactive mode')
+@click.argument('game_id', type=int)
 @click.pass_context
-def search(ctx, interactive):
-    """Search for games interactively."""
+def show(ctx, game_id):
+    """Show detailed information about a specific game."""
+    db_path = ctx.obj['db_path']
+    
+    if not os.path.exists(db_path):
+        click.echo(f"Error: Database '{db_path}' does not exist. Run 'ingest' first.")
+        return
+    
+    db = ChessDatabase(db_path)
+    game = db.execute_sql_query(f"SELECT * FROM games WHERE id = {game_id}")
+    
+    if not game:
+        click.echo(f"Game with ID {game_id} not found.")
+        return
+    
+    game = game[0]
+    click.echo(f"Game #{game_id}")
+    click.echo("=" * 50)
+    click.echo(f"White: {game.get('white_player', 'Unknown')}")
+    click.echo(f"Black: {game.get('black_player', 'Unknown')}")
+    click.echo(f"Result: {game.get('result', 'Unknown')}")
+    click.echo(f"Date: {game.get('date_played', 'Unknown')}")
+    click.echo(f"Event: {game.get('event', 'Unknown')}")
+    click.echo(f"Site: {game.get('site', 'Unknown')}")
+    click.echo(f"Round: {game.get('round', 'Unknown')}")
+    click.echo(f"ECO: {game.get('eco_code', 'Unknown')}")
+    click.echo(f"Opening: {game.get('opening', 'Unknown')}")
+    click.echo(f"Time Control: {game.get('time_control', 'Unknown')}")
+    click.echo(f"White Elo: {game.get('white_elo', 'Unknown')}")
+    click.echo(f"Black Elo: {game.get('black_elo', 'Unknown')}")
+    click.echo("\nMoves:")
+    click.echo("-" * 30)
+    click.echo(game.get('moves', ''))
+
+
+def _start_interactive_mode(ctx):
+    """Start interactive mode."""
     db_path = ctx.obj['db_path']
     
     if not os.path.exists(db_path):
@@ -137,15 +180,7 @@ def search(ctx, interactive):
     
     query_lang = ChessQueryLanguage(db_path)
     
-    if interactive:
-        _interactive_search(query_lang)
-    else:
-        click.echo("Use --interactive flag to start interactive search mode")
-
-
-def _interactive_search(query_lang: ChessQueryLanguage):
-    """Interactive search mode."""
-    click.echo("Interactive Chess Game Search")
+    click.echo("ChessQL Interactive Mode")
     click.echo("Type 'help' for commands, 'quit' to exit")
     click.echo("=" * 50)
     
@@ -164,7 +199,9 @@ def _interactive_search(query_lang: ChessQueryLanguage):
             elif user_input.strip():
                 results = query_lang.execute_query(user_input)
                 if results:
-                    _output_table(results[:10])  # Show first 10 results
+                    _output_table(results[:20])  # Show first 20 results
+                    if len(results) > 20:
+                        click.echo(f"... and {len(results) - 20} more results")
                 else:
                     click.echo("No results found.")
         
@@ -185,9 +222,8 @@ Available Commands:
   quit/exit - Exit interactive mode
 
 Query Types:
-  - Simple search: "Magnus Carlsen"
-  - SQL-like: SELECT * FROM games WHERE white_player = "Magnus Carlsen"
-  - FIND queries: FIND games where result = "1-0" AND eco_code = "E90"
+  - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
+  - Pattern queries: /e4/ (for moves matching pattern)
 """)
 
 
@@ -214,19 +250,14 @@ def _output_table(results: List[Dict[str, Any]]):
     if not results:
         return
     
-    # Get column headers
-    headers = ['ID', 'White', 'Black', 'Result', 'Date', 'Event', 'ECO']
+    # Get column headers dynamically from the first result
+    headers = list(results[0].keys())
     
     # Calculate column widths
     widths = [len(header) for header in headers]
     for result in results:
-        widths[0] = max(widths[0], len(str(result.get('id', ''))))
-        widths[1] = max(widths[1], len(str(result.get('white_player', ''))))
-        widths[2] = max(widths[2], len(str(result.get('black_player', ''))))
-        widths[3] = max(widths[3], len(str(result.get('result', ''))))
-        widths[4] = max(widths[4], len(str(result.get('date_played', ''))))
-        widths[5] = max(widths[5], len(str(result.get('event', ''))))
-        widths[6] = max(widths[6], len(str(result.get('eco_code', ''))))
+        for i, header in enumerate(headers):
+            widths[i] = max(widths[i], len(str(result.get(header, ''))))
     
     # Print header
     header_row = " | ".join(header.ljust(widths[i]) for i, header in enumerate(headers))
@@ -236,13 +267,7 @@ def _output_table(results: List[Dict[str, Any]]):
     # Print rows
     for result in results:
         row = " | ".join([
-            str(result.get('id', '')).ljust(widths[0]),
-            str(result.get('white_player', '')).ljust(widths[1]),
-            str(result.get('black_player', '')).ljust(widths[2]),
-            str(result.get('result', '')).ljust(widths[3]),
-            str(result.get('date_played', '')).ljust(widths[4]),
-            str(result.get('event', '')).ljust(widths[5]),
-            str(result.get('eco_code', '')).ljust(widths[6])
+            str(result.get(header, '')).ljust(widths[i]) for i, header in enumerate(headers)
         ])
         click.echo(row)
 
@@ -260,41 +285,6 @@ def _output_csv(results: List[Dict[str, Any]]):
         writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results)
-
-
-@cli.command()
-@click.argument('game_id', type=int)
-@click.pass_context
-def show(ctx, game_id):
-    """Show detailed information about a specific game."""
-    db_path = ctx.obj['db_path']
-    
-    if not os.path.exists(db_path):
-        click.echo(f"Error: Database '{db_path}' does not exist. Run 'ingest' first.")
-        return
-    
-    db = ChessDatabase(db_path)
-    game = db.get_game_by_id(game_id)
-    
-    if not game:
-        click.echo(f"Game with ID {game_id} not found.")
-        return
-    
-    click.echo(f"Game #{game_id}")
-    click.echo("=" * 50)
-    click.echo(f"White: {game.get('white_player', 'Unknown')}")
-    click.echo(f"Black: {game.get('black_player', 'Unknown')}")
-    click.echo(f"Result: {game.get('result', 'Unknown')}")
-    click.echo(f"Date: {game.get('date_played', 'Unknown')}")
-    click.echo(f"Event: {game.get('event', 'Unknown')}")
-    click.echo(f"Site: {game.get('site', 'Unknown')}")
-    click.echo(f"Round: {game.get('round', 'Unknown')}")
-    click.echo(f"ECO: {game.get('eco_code', 'Unknown')}")
-    click.echo(f"Opening: {game.get('opening', 'Unknown')}")
-    click.echo(f"Time Control: {game.get('time_control', 'Unknown')}")
-    click.echo("\nPGN:")
-    click.echo("-" * 30)
-    click.echo(game.get('pgn_text', ''))
 
 
 if __name__ == '__main__':

@@ -44,8 +44,14 @@ class PGNIngestion:
     
     def _split_pgn_games(self, content: str) -> List[str]:
         """Split PGN content into individual games."""
-        # Split on double newlines that separate games
-        games = re.split(r'\n\s*\n', content)
+        # Split on double newlines that separate games, but be more careful
+        # Look for patterns like: \n\n[Event "..." or \n\n\n[Event "..."
+        games = re.split(r'\n\s*\n\s*\n', content)  # Split on 2+ newlines
+        
+        # If that doesn't work, try splitting on single newline followed by [Event
+        if len(games) == 1:
+            games = re.split(r'\n(?=\[Event)', content)
+        
         # Filter out empty games and games without proper PGN structure
         valid_games = []
         for game in games:
@@ -73,11 +79,13 @@ class PGNIngestion:
                     tags[tag_name] = tag_value
             else:
                 # This is part of the moves
-                moves_text += line + " "
+                if line:  # Only add non-empty lines
+                    moves_text += line + " "
         
         # Extract key information
         game_data = {
             'pgn_text': game_text,
+            'moves': moves_text.strip(),
             'white_player': tags.get('White', ''),
             'black_player': tags.get('Black', ''),
             'result': tags.get('Result', ''),
@@ -88,30 +96,14 @@ class PGNIngestion:
             'eco_code': tags.get('ECO', ''),
             'opening': tags.get('Opening', ''),
             'time_control': tags.get('TimeControl', ''),
-            'moves': self._parse_moves(moves_text)
+            'white_elo': tags.get('WhiteElo', ''),
+            'black_elo': tags.get('BlackElo', ''),
+            'variant': tags.get('Variant', ''),
+            'termination': tags.get('Termination', '')
         }
         
         return game_data
     
-    def _parse_moves(self, moves_text: str) -> List[Dict[str, Any]]:
-        """Parse moves from PGN notation."""
-        moves = []
-        
-        # Remove result markers
-        moves_text = re.sub(r'\s+(1-0|0-1|1/2-1/2|\*)\s*$', '', moves_text)
-        
-        # Split into move pairs
-        move_pairs = re.findall(r'(\d+)\.\s*([^\s]+)\s+([^\s]+)', moves_text)
-        
-        for move_number, white_move, black_move in move_pairs:
-            moves.append({
-                'move_number': int(move_number),
-                'white_move': white_move,
-                'black_move': black_move,
-                'position_fen': ''  # Placeholder - would need chess engine to calculate
-            })
-        
-        return moves
     
     def ingest_file(self, file_path: str) -> int:
         """Ingest a PGN file into the database."""
@@ -127,6 +119,8 @@ class PGNIngestion:
         ingested_count = 0
         for game in games:
             try:
+                moves_length = len(game.get('moves', ''))
+                print(f"  Game has {moves_length} characters of moves")
                 game_id = self.db.insert_game(game)
                 ingested_count += 1
                 print(f"  Ingested game {ingested_count}: {game.get('white_player', 'Unknown')} vs {game.get('black_player', 'Unknown')}")
