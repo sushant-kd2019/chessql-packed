@@ -7,6 +7,7 @@ import re
 import os
 from typing import List, Dict, Any, Optional
 from database import ChessDatabase
+from piece_analysis import ChessPieceAnalyzer
 
 
 class PGNIngestion:
@@ -15,6 +16,7 @@ class PGNIngestion:
     def __init__(self, db_path: str = "chess_games.db"):
         """Initialize the ingestion system with database connection."""
         self.db = ChessDatabase(db_path)
+        self.piece_analyzer = ChessPieceAnalyzer()
     
     def parse_pgn_file(self, file_path: str) -> List[Dict[str, Any]]:
         """Parse a PGN file and extract game data."""
@@ -122,6 +124,19 @@ class PGNIngestion:
                 moves_length = len(game.get('moves', ''))
                 print(f"  Game has {moves_length} characters of moves")
                 game_id = self.db.insert_game(game)
+                
+                # Analyze piece events
+                events = self.piece_analyzer.find_piece_events(
+                    game.get('moves', ''),
+                    event_type=None,  # Get all events
+                    piece=None,       # All pieces
+                    max_move=None     # All moves
+                )
+                
+                if events:
+                    self.db.insert_events(game_id, events)
+                    print(f"    Found {len(events)} piece events")
+                
                 ingested_count += 1
                 print(f"  Ingested game {ingested_count}: {game.get('white_player', 'Unknown')} vs {game.get('black_player', 'Unknown')}")
             except Exception as e:
