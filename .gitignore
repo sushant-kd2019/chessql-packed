@@ -5,3 +5,4 @@
 /chess_games.db-wal
 /chess_games.db-journal
 *.pgn
+.env

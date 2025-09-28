@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from database import ChessDatabase
 from ingestion import PGNIngestion
 from query_language import ChessQueryLanguage
+from natural_language_search import NaturalLanguageSearch
 
 
 @click.group(invoke_without_command=True)
@@ -181,9 +182,11 @@ def _start_interactive_mode(ctx):
         return
     
     query_lang = ChessQueryLanguage(db_path)
+    nl_search = None  # Initialize lazily when needed
     
     click.echo("ChessQL Interactive Mode")
     click.echo("Type 'help' for commands, 'quit' to exit")
+    click.echo("Ask natural language questions or use SQL queries")
     click.echo("=" * 50)
     
     while True:
@@ -198,14 +201,35 @@ def _start_interactive_mode(ctx):
                 _show_examples(query_lang)
             elif user_input.lower() == 'stats':
                 _show_stats(query_lang)
+            elif user_input.lower() == 'nl-examples':
+                _show_nl_examples()
             elif user_input.strip():
-                results = query_lang.execute_query(user_input)
-                if results:
-                    _output_table(results[:20])  # Show first 20 results
-                    if len(results) > 20:
-                        click.echo(f"... and {len(results) - 20} more results")
+                # Check if it's a natural language query
+                if _is_natural_language_query(user_input):
+                    if nl_search is None:
+                        try:
+                            nl_search = NaturalLanguageSearch(db_path)
+                        except Exception as e:
+                            click.echo(f"Error initializing natural language search: {e}")
+                            click.echo("Make sure you have set your OPENAI_API_KEY environment variable.")
+                            continue
+                    
+                    results = nl_search.search(user_input)
+                    if results and not (len(results) == 1 and 'error' in results[0]):
+                        _output_table(results[:20])  # Show first 20 results
+                        if len(results) > 20:
+                            click.echo(f"... and {len(results) - 20} more results")
+                    else:
+                        click.echo("No results found or error occurred.")
                 else:
-                    click.echo("No results found.")
+                    # Regular SQL query
+                    results = query_lang.execute_query(user_input)
+                    if results:
+                        _output_table(results[:20])  # Show first 20 results
+                        if len(results) > 20:
+                            click.echo(f"... and {len(results) - 20} more results")
+                    else:
+                        click.echo("No results found.")
         
         except KeyboardInterrupt:
             click.echo("\nGoodbye!")
@@ -214,18 +238,55 @@ def _start_interactive_mode(ctx):
             click.echo(f"Error: {e}")
 
 
+def _is_natural_language_query(query: str) -> bool:
+    """Check if query looks like natural language."""
+    question_words = ['what', 'how', 'when', 'where', 'why', 'who', 'which', 'show', 'find', 'get', 'list']
+    query_lower = query.lower()
+    
+    # Check if it starts with a question word or common patterns
+    return (any(query_lower.startswith(word) for word in question_words) or
+            '?' in query or
+            query_lower.startswith('tell me') or
+            query_lower.startswith('give me') or
+            query_lower.startswith('i want'))
+
+
+def _show_nl_examples():
+    """Show natural language query examples."""
+    click.echo("Natural Language Query Examples:")
+    click.echo("=" * 50)
+    
+    examples = [
+        "Show me games where lecorvus won",
+        "Find games where queen was sacrificed", 
+        "Show me lecorvus wins with queen sacrifices",
+        "Find games where pawns were exchanged before move 10",
+        "Show games sorted by ELO rating",
+        "Find games where lecorvus lost and knight was sacrificed",
+        "Show me the most recent games",
+        "Find games with the highest ELO ratings",
+        "Show me games where bishops were captured by knights",
+        "Find games where lecorvus drew"
+    ]
+    
+    for i, example in enumerate(examples, 1):
+        click.echo(f"{i}. {example}")
+
+
 def _show_help():
     """Show help information."""
     click.echo("""
 Available Commands:
-  help      - Show this help message
-  examples  - Show example queries
-  stats     - Show database statistics
-  quit/exit - Exit interactive mode
+  help         - Show this help message
+  examples     - Show example SQL queries
+  nl-examples  - Show natural language query examples
+  stats        - Show database statistics
+  quit/exit    - Exit interactive mode
 
 Query Types:
   - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
   - Pattern queries: /e4/ (for moves matching pattern)
+  - Natural language: "Show me games where lecorvus won"
   - Sorting: Add ORDER BY column [ASC/DESC] to any SQL query
   - Combined: Use AND/OR with player results and piece events
 """)
@@ -247,6 +308,69 @@ def _show_stats(query_lang: ChessQueryLanguage):
     click.echo(f"\nDatabase Statistics:")
     click.echo(f"  Total games: {stats['total_games']}")
     click.echo(f"  Unique players: {stats['unique_players']}")
+
+
+@cli.command()
+@click.argument('query')
+@click.option('--format', 'output_format', default='table', 
+              type=click.Choice(['table', 'json', 'csv']), 
+              help='Output format')
+@click.option('--limit', default=100, help='Maximum number of results')
+@click.option('--api-key', help='OpenAI API key (or set OPENAI_API_KEY env var)')
+@click.pass_context
+def ask(ctx, query, output_format, limit, api_key):
+    """Ask a natural language question about chess games.
+    
+    Examples:
+    - "Show me games where lecorvus won"
+    - "Find games where queen was sacrificed"
+    - "Show me lecorvus wins with queen sacrifices"
+    """
+    db_path = ctx.obj['db_path']
+    
+    if not os.path.exists(db_path):
+        click.echo(f"Error: Database '{db_path}' does not exist. Run 'ingest' first.")
+        return
+    
+    try:
+        nl_search = NaturalLanguageSearch(db_path, api_key)
+        results = nl_search.search(query)
+        
+        if not results:
+            click.echo("No results found.")
+            return
+        
+        # Check for errors
+        if len(results) == 1 and 'error' in results[0]:
+            click.echo(f"Error: {results[0]['error']}")
+            return
+        
+        # Limit results
+        if len(results) > limit:
+            results = results[:limit]
+            click.echo(f"Showing first {limit} results:")
+        
+        # Format output
+        if output_format == 'json':
+            click.echo(json.dumps(results, indent=2))
+        elif output_format == 'csv':
+            if results:
+                import csv
+                import io
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=results[0].keys())
+                writer.writeheader()
+                writer.writerows(results)
+                click.echo(output.getvalue())
+        else:  # table format
+            _output_table(results)
+            
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        click.echo("Make sure you have set your OPENAI_API_KEY environment variable or use --api-key option.")
+    except Exception as e:
+        click.echo(f"Error: {e}")
+        click.echo("Make sure you have set your OPENAI_API_KEY environment variable or use --api-key option.")
 
 
 def _output_table(results: List[Dict[str, Any]]):
