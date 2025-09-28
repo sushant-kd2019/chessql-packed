@@ -17,7 +17,19 @@ from natural_language_search import NaturalLanguageSearch
 @click.option('--db', default='chess_games.db', help='Database file path')
 @click.pass_context
 def cli(ctx, db):
-    """ChessQL - Chess PGN Database Query Language CLI"""
+    """ChessQL - A chess game database query system.
+    
+    ChessQL allows you to query chess games using SQL, natural language, and pattern matching.
+    
+    Examples:
+      python cli.py                                    # Start interactive mode
+      python cli.py query "SELECT * FROM games"       # Run SQL query
+      python cli.py ask "Show me lecorvus wins"       # Natural language query
+      python cli.py ingest sample_games.pgn           # Import PGN files
+      python cli.py stats                             # Show database statistics
+    
+    For more examples, start interactive mode and type 'help'.
+    """
     ctx.ensure_object(dict)
     ctx.obj['db_path'] = db
     
@@ -186,7 +198,7 @@ def _start_interactive_mode(ctx):
     
     click.echo("ChessQL Interactive Mode")
     click.echo("Type 'help' for commands, 'quit' to exit")
-    click.echo("Ask natural language questions or use SQL queries")
+    click.echo("Use SQL queries directly, or 'ask <question>' for natural language")
     click.echo("=" * 50)
     
     while True:
@@ -203,33 +215,33 @@ def _start_interactive_mode(ctx):
                 _show_stats(query_lang)
             elif user_input.lower() == 'nl-examples':
                 _show_nl_examples()
-            elif user_input.strip():
-                # Check if it's a natural language query
-                if _is_natural_language_query(user_input):
-                    if nl_search is None:
-                        try:
-                            nl_search = NaturalLanguageSearch(db_path)
-                        except Exception as e:
-                            click.echo(f"Error initializing natural language search: {e}")
-                            click.echo("Make sure you have set your OPENAI_API_KEY environment variable.")
-                            continue
-                    
-                    results = nl_search.search(user_input)
-                    if results and not (len(results) == 1 and 'error' in results[0]):
-                        _output_table(results[:20])  # Show first 20 results
-                        if len(results) > 20:
-                            click.echo(f"... and {len(results) - 20} more results")
-                    else:
-                        click.echo("No results found or error occurred.")
+            elif user_input.lower().startswith('ask '):
+                # Natural language query with explicit 'ask' command
+                query = user_input[4:].strip()  # Remove 'ask ' prefix
+                if nl_search is None:
+                    try:
+                        nl_search = NaturalLanguageSearch(db_path)
+                    except Exception as e:
+                        click.echo(f"Error initializing natural language search: {e}")
+                        click.echo("Make sure you have set your OPENAI_API_KEY environment variable.")
+                        continue
+                
+                results = nl_search.search(query)
+                if results and not (len(results) == 1 and 'error' in results[0]):
+                    _output_table(results[:20])  # Show first 20 results
+                    if len(results) > 20:
+                        click.echo(f"... and {len(results) - 20} more results")
                 else:
-                    # Regular SQL query
-                    results = query_lang.execute_query(user_input)
-                    if results:
-                        _output_table(results[:20])  # Show first 20 results
-                        if len(results) > 20:
-                            click.echo(f"... and {len(results) - 20} more results")
-                    else:
-                        click.echo("No results found.")
+                    click.echo("No results found or error occurred.")
+            elif user_input.strip():
+                # Regular SQL query
+                results = query_lang.execute_query(user_input)
+                if results:
+                    _output_table(results[:20])  # Show first 20 results
+                    if len(results) > 20:
+                        click.echo(f"... and {len(results) - 20} more results")
+                else:
+                    click.echo("No results found.")
         
         except KeyboardInterrupt:
             click.echo("\nGoodbye!")
@@ -238,35 +250,24 @@ def _start_interactive_mode(ctx):
             click.echo(f"Error: {e}")
 
 
-def _is_natural_language_query(query: str) -> bool:
-    """Check if query looks like natural language."""
-    question_words = ['what', 'how', 'when', 'where', 'why', 'who', 'which', 'show', 'find', 'get', 'list']
-    query_lower = query.lower()
-    
-    # Check if it starts with a question word or common patterns
-    return (any(query_lower.startswith(word) for word in question_words) or
-            '?' in query or
-            query_lower.startswith('tell me') or
-            query_lower.startswith('give me') or
-            query_lower.startswith('i want'))
-
-
 def _show_nl_examples():
     """Show natural language query examples."""
     click.echo("Natural Language Query Examples:")
     click.echo("=" * 50)
+    click.echo("Use 'ask <question>' to ask natural language questions:")
+    click.echo("")
     
     examples = [
-        "Show me games where lecorvus won",
-        "Find games where queen was sacrificed", 
-        "Show me lecorvus wins with queen sacrifices",
-        "Find games where pawns were exchanged before move 10",
-        "Show games sorted by ELO rating",
-        "Find games where lecorvus lost and knight was sacrificed",
-        "Show me the most recent games",
-        "Find games with the highest ELO ratings",
-        "Show me games where bishops were captured by knights",
-        "Find games where lecorvus drew"
+        "ask Show me games where lecorvus won",
+        "ask Find games where queen was sacrificed", 
+        "ask Show me lecorvus wins with queen sacrifices",
+        "ask Find games where pawns were exchanged before move 10",
+        "ask Show games sorted by ELO rating",
+        "ask Find games where lecorvus lost and knight was sacrificed",
+        "ask Show me the most recent games",
+        "ask Find games with the highest ELO ratings",
+        "ask Show me games where bishops were captured by knights",
+        "ask Find games where lecorvus drew"
     ]
     
     for i, example in enumerate(examples, 1):
@@ -276,19 +277,50 @@ def _show_nl_examples():
 def _show_help():
     """Show help information."""
     click.echo("""
+ChessQL Help
+============
+
 Available Commands:
   help         - Show this help message
   examples     - Show example SQL queries
   nl-examples  - Show natural language query examples
   stats        - Show database statistics
+  ask <query>  - Ask a natural language question
   quit/exit    - Exit interactive mode
 
-Query Types:
-  - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
-  - Pattern queries: /e4/ (for moves matching pattern)
-  - Natural language: "Show me games where lecorvus won"
-  - Sorting: Add ORDER BY column [ASC/DESC] to any SQL query
-  - Combined: Use AND/OR with player results and piece events
+Query Types & Examples:
+=======================
+
+1. SQL Queries (direct):
+   SELECT * FROM games WHERE white_player = 'lecorvus'
+   SELECT COUNT(*) FROM games WHERE result = '1-0'
+   SELECT white_player, black_player, result FROM games ORDER BY date_played DESC LIMIT 10
+
+2. Pattern Queries (regex on moves):
+   /e4/                    - Games starting with e4
+   /Nf3.*Nc6/             - Games with Nf3 followed by Nc6
+   /Q.*captured.*Q/        - Games with queen captures
+
+3. Natural Language (use 'ask' prefix):
+   ask Show me games where lecorvus won
+   ask Find games where queen was sacrificed
+   ask Show me lecorvus wins with queen sacrifices
+
+4. Advanced SQL with Chess Events:
+   SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
+   SELECT * FROM games WHERE (pawn exchanged before move 10)
+   SELECT * FROM games WHERE (knight captured) AND (bishop captured)
+
+5. Sorting & Filtering:
+   SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC
+   SELECT * FROM games WHERE white_elo > 1800 ORDER BY date_played DESC
+
+6. Player Results:
+   SELECT * FROM games WHERE (lecorvus won)
+   SELECT * FROM games WHERE (lecorvus lost) AND (queen sacrificed)
+   SELECT * FROM games WHERE (lecorvus drew)
+
+Type 'examples' for more SQL examples or 'nl-examples' for natural language examples.
 """)
 
 
