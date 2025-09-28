@@ -39,6 +39,8 @@ CRITICAL RULES:
 4. For piece events: (piece_name exchanged/sacrificed) - NO player names in piece events
 5. For counts: SELECT COUNT(*) FROM games WHERE conditions
 6. Combine conditions with AND/OR as needed
+7. NEVER use JOIN with captures table - use ChessQL patterns like (queen sacrificed) instead
+8. For player-specific sacrifices: combine (player won/lost) AND (piece sacrificed) patterns
 
 Available tables and fields:
 - games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
@@ -54,17 +56,18 @@ Special query patterns:
 EXAMPLES:
 - "Show me games where lecorvus won" → SELECT * FROM games WHERE (lecorvus won)
 - "Find games where queen was sacrificed" → SELECT * FROM games WHERE (queen sacrificed)
-- "How many games did lecorvus sacrifice his queen" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
-- "How many games did lecorvus sacrifice his queen and win" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'win' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND g.black_result = 'win' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
-- "How many games did lecorvus sacrifice his queen and lose" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'loss' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND g.black_result = 'loss' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
+- "How many games did lecorvus sacrifice his queen" → SELECT COUNT(*) FROM games WHERE (queen sacrificed)
+- "Count games where queen was sacrificed" → SELECT COUNT(*) FROM games WHERE (queen sacrificed)
+- "How many games did lecorvus sacrifice his queen and win" → SELECT COUNT(*) FROM games WHERE (lecorvus won) AND (queen sacrificed)
+- "How many games did lecorvus sacrifice his queen and lose" → SELECT COUNT(*) FROM games WHERE (lecorvus lost) AND (queen sacrificed)
 - "Show lecorvus wins with queen sacrifices" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
 - "Find pawn exchanges before move 10" → SELECT * FROM games WHERE (pawn exchanged before move 10)
 - "Show games sorted by ELO rating" → SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC
 - "Find games where knight was exchanged" → SELECT * FROM games WHERE (knight exchanged)
 - "Show me lecorvus losses" → SELECT * FROM games WHERE (lecorvus lost)
 - "Count games with bishop sacrifices" → SELECT COUNT(*) FROM games WHERE (bishop sacrificed)
-- "How many games did lecorvus sacrifice his knight" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND c.side = 'white') OR (g.black_player = 'lecorvus' AND c.side = 'black')) AND c.captured_piece = 'N' AND c.is_sacrifice = 1
-- "Show games where lecorvus won and sacrificed queen" → SELECT * FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'win' AND c.side = 'white') OR (g.black_player = 'lecorvus' AND g.black_result = 'win' AND c.side = 'black')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
+- "How many games did lecorvus sacrifice his knight" → SELECT COUNT(*) FROM games WHERE (lecorvus won) AND (knight sacrificed)
+- "Show games where lecorvus won and sacrificed queen" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
 
 Always return ONLY the SQL query, no explanations or additional text."""
 

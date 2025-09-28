@@ -116,7 +116,7 @@ class ChessQueryLanguage:
                     EXISTS (
                         SELECT 1 FROM captures c 
                         WHERE c.game_id = games.id 
-                        AND c.capturing_piece = '{piece.upper()}' 
+                        AND c.captured_piece = '{piece.upper()}' 
                         AND c.is_exchange = 1
                         {move_clause}
                     )
@@ -126,7 +126,7 @@ class ChessQueryLanguage:
                     EXISTS (
                         SELECT 1 FROM captures c 
                         WHERE c.game_id = games.id 
-                        AND c.capturing_piece = '{piece.upper()}' 
+                        AND c.captured_piece = '{piece.upper()}' 
                         AND c.is_sacrifice = 1
                         {move_clause}
                     )
