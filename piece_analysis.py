@@ -149,7 +149,9 @@ class ChessPieceAnalyzer:
             captured_value = self.piece_values.get(captured_piece, 0)
             
             is_exchange = piece_value == captured_value
-            is_sacrifice = piece_value > captured_value
+            # A sacrifice is when you lose a higher-valued piece for a lower-valued piece
+            # This happens when the captured piece is worth more than the capturing piece
+            is_sacrifice = captured_value > piece_value
             
             return {
                 'move_number': move_number,
@@ -201,12 +203,13 @@ class ChessPieceAnalyzer:
         if source_square:
             self.board[source_square] = None
         
-        # Determine if it's an exchange or sacrifice
+        # Get piece values for later analysis
         piece_value = self.piece_values.get(piece, 0)
         captured_value = self.piece_values.get(captured_piece, 0)
         
-        is_exchange = piece_value == captured_value
-        is_sacrifice = piece_value > captured_value
+        # Initial values - will be updated by _analyze_sacrifices
+        is_exchange = False
+        is_sacrifice = False
         
         return {
             'move_number': move_number,
@@ -263,18 +266,93 @@ class ChessPieceAnalyzer:
         # This is not perfect but better than nothing
         return None  # We'll leave this as None for now
     
-    def analyze_captures(self, moves_text: str) -> List[Dict[str, Any]]:
+    def analyze_captures(self, moves_text: str, white_player: str = None, black_player: str = None) -> List[Dict[str, Any]]:
         """Analyze moves to find all captures with detailed information."""
         moves = self.parse_moves_with_captures(moves_text)
         captures = []
         
         for move in moves:
             if move['white_capture']:
+                move['white_capture']['white_player'] = white_player
+                move['white_capture']['black_player'] = black_player
                 captures.append(move['white_capture'])
             if move['black_capture']:
+                move['black_capture']['white_player'] = white_player
+                move['black_capture']['black_player'] = black_player
                 captures.append(move['black_capture'])
         
+        # Analyze sacrifices by looking at consecutive captures
+        self._analyze_sacrifices(captures)
+        
         return captures
+    
+    def _analyze_sacrifices(self, captures: List[Dict[str, Any]]) -> None:
+        """Analyze sacrifices by looking at queen captures and opponent queen status."""
+        # Reset all sacrifice flags first
+        for capture in captures:
+            capture['is_sacrifice'] = False
+            capture['is_exchange'] = False
+        
+        # Group captures by move number for analysis
+        captures_by_move = {}
+        for capture in captures:
+            move_num = capture['move_number']
+            if move_num not in captures_by_move:
+                captures_by_move[move_num] = []
+            captures_by_move[move_num].append(capture)
+        
+        # Analyze queen sacrifices
+        for move_num in sorted(captures_by_move.keys()):
+            current_captures = captures_by_move[move_num]
+            
+            # Look for queen captures in this move
+            for capture in current_captures:
+                if capture['captured_piece'] == 'Q':
+                    # Check if this is a queen sacrifice
+                    # A queen sacrifice means: lecorvus' queen is captured AND opponent's queen survives
+                    if self._is_queen_sacrifice(capture, captures_by_move, move_num):
+                        capture['is_sacrifice'] = True
+                    elif self._is_queen_exchange(capture, captures_by_move, move_num):
+                        capture['is_exchange'] = True
+    
+    def _is_queen_sacrifice(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:
+        """Check if a queen capture is a sacrifice (opponent's queen survives)."""
+        # Get the side that captured the queen
+        capturing_side = queen_capture['side']
+        lecorvus_side = 'white' if queen_capture.get('white_player') == 'lecorvus' else 'black'
+        
+        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen soon after
+        if capturing_side != lecorvus_side:
+            # lecorvus' queen was captured - check if lecorvus captures opponent's queen soon after
+            for check_move in range(move_num, min(move_num + 3, max(captures_by_move.keys()) + 1)):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
+                            # lecorvus captured opponent's queen, so this is not a sacrifice
+                            return False
+            
+            # If we get here, lecorvus didn't capture opponent's queen, so this is a sacrifice
+            return True
+        
+        return False
+    
+    def _is_queen_exchange(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:
+        """Check if a queen capture is an exchange (opponent's queen is captured soon after)."""
+        # Get the side that captured the queen
+        capturing_side = queen_capture['side']
+        lecorvus_side = 'white' if queen_capture.get('white_player') == 'lecorvus' else 'black'
+        
+        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen soon after
+        if capturing_side != lecorvus_side:
+            # lecorvus' queen was captured - check if lecorvus captures opponent's queen soon after
+            for check_move in range(move_num, min(move_num + 2, max(captures_by_move.keys()) + 1)):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
+                            # lecorvus captured opponent's queen soon after, so this is an exchange
+                            return True
+        
+        return False
     
     def get_capture_statistics(self, moves_text: str) -> Dict[str, Any]:
         """Get statistics about captures in a game."""

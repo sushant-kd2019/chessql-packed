@@ -126,7 +126,7 @@ class PGNIngestion:
                 game_id = self.db.insert_game(game)
                 
                 # Analyze captures with position tracking
-                captures = self.piece_analyzer.analyze_captures(game.get('moves', ''))
+                captures = self.piece_analyzer.analyze_captures(game.get('moves', ''), game.get('white_player'), game.get('black_player'))
                 
                 if captures:
                     self.db.insert_captures(game_id, captures)

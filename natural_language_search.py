@@ -32,27 +32,41 @@ class NaturalLanguageSearch:
         # System prompt for the AI
         self.system_prompt = """You are a ChessQL query generator. Convert natural language questions about chess games into SQL queries.
 
+CRITICAL RULES:
+1. ALWAYS query the 'games' table, NEVER the 'captures' table directly
+2. Use EXACT syntax patterns shown in examples - no variations
+3. For player results: (player_name won/lost/drew) - NO quotes around player names
+4. For piece events: (piece_name exchanged/sacrificed) - NO player names in piece events
+5. For counts: SELECT COUNT(*) FROM games WHERE conditions
+6. Combine conditions with AND/OR as needed
+
 Available tables and fields:
 - games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
 - captures: id, game_id, move_number, side, capturing_piece, captured_piece, from_square, to_square, move_notation, piece_value, captured_value, is_exchange, is_sacrifice, created_at
 
 Special query patterns:
-- Player results: Use (player_name won/lost/drew) for player outcomes
-- Piece events: Use (piece exchanged/sacrificed) for piece exchanges/sacrifices
-- Captures: Use (piece1 captured piece2) for specific captures
+- Player results: (player_name won/lost/drew) for player outcomes
+- Piece events: (piece exchanged/sacrificed) for piece exchanges/sacrifices
+- Captures: (piece1 captured piece2) for specific captures
 - Move conditions: Add "before move N" or "after move N" for timing
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
 
-Examples:
-- "Show me games where lecorvus won" → SELECT * FROM games WHERE ("lecorvus" won)
+EXAMPLES:
+- "Show me games where lecorvus won" → SELECT * FROM games WHERE (lecorvus won)
 - "Find games where queen was sacrificed" → SELECT * FROM games WHERE (queen sacrificed)
-- "Show lecorvus wins with queen sacrifices" → SELECT * FROM games WHERE ("lecorvus" won) AND (queen sacrificed)
+- "How many games did lecorvus sacrifice his queen" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND c.side = 'black') OR (g.black_player = 'lecorvus' AND c.side = 'white')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
+- "Show lecorvus wins with queen sacrifices" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
 - "Find pawn exchanges before move 10" → SELECT * FROM games WHERE (pawn exchanged before move 10)
 - "Show games sorted by ELO rating" → SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC
+- "Find games where knight was exchanged" → SELECT * FROM games WHERE (knight exchanged)
+- "Show me lecorvus losses" → SELECT * FROM games WHERE (lecorvus lost)
+- "Count games with bishop sacrifices" → SELECT COUNT(*) FROM games WHERE (bishop sacrificed)
+- "How many games did lecorvus sacrifice his knight" → SELECT COUNT(*) FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND c.side = 'white') OR (g.black_player = 'lecorvus' AND c.side = 'black')) AND c.captured_piece = 'N' AND c.is_sacrifice = 1
+- "Show games where lecorvus won and sacrificed queen" → SELECT * FROM games g JOIN captures c ON g.id = c.game_id WHERE ((g.white_player = 'lecorvus' AND g.white_result = 'win' AND c.side = 'white') OR (g.black_player = 'lecorvus' AND g.black_result = 'win' AND c.side = 'black')) AND c.captured_piece = 'Q' AND c.is_sacrifice = 1
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
-    def search(self, natural_language_query: str) -> List[Dict[str, Any]]:
+    def search(self, natural_language_query: str, show_query: bool = True) -> List[Dict[str, Any]]:
         """Convert natural language query to ChessQL and execute it."""
         try:
             # Convert natural language to SQL
@@ -60,6 +74,11 @@ Always return ONLY the SQL query, no explanations or additional text."""
             
             if not sql_query:
                 return [{"error": "Could not convert natural language query to SQL"}]
+            
+            # Show the generated SQL query if requested
+            if show_query:
+                print(f"Generated SQL: {sql_query}")
+                print("-" * 50)
             
             # Execute the SQL query
             results = self.query_lang.execute_query(sql_query)
