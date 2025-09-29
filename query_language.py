@@ -79,6 +79,10 @@ class ChessQueryLanguage:
             r'\([^)]*\b(exchanged|sacrificed)\s+(pawn|bishop|knight|rook|queen|king)',
             r'\([^)]*\b(\w+)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
             r'\([^)]*\b(opponent)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
+            r'\([^)]*\b(pawn\s+promoted\s+to\s+(pawn|bishop|knight|rook|queen|king))',
+            r'\([^)]*\b(promoted\s+to\s+(pawn|bishop|knight|rook|queen|king))',
+            r'\([^)]*\b(pawn\s+promoted\s+to\s+(pawn|bishop|knight|rook|queen|king)\s+x\s+\d+)',
+            r'\([^)]*\b(promoted\s+to\s+(pawn|bishop|knight|rook|queen|king)\s+x\s+\d+)',
         ]
         
         for pattern in capture_patterns:
@@ -90,6 +94,9 @@ class ChessQueryLanguage:
     def _handle_sql_with_captures(self, query: str) -> List[Dict[str, Any]]:
         """Handle SQL queries that contain capture conditions."""
         import re
+        
+        # First, preprocess any remaining player result conditions
+        query = self._preprocess_player_result_conditions(query)
         
         # Check for opponent-specific exchange/sacrifice patterns first
         opponent_exchange_match = re.search(
@@ -139,6 +146,194 @@ class ChessQueryLanguage:
             
             # Replace the condition with the subquery
             modified_query = query.replace(opponent_exchange_match.group(0), subquery)
+            return self.db.execute_sql_query(modified_query)
+        
+        # Check for pawn promotion patterns
+        promotion_match = re.search(
+            r'\(([^)]*\b(pawn\s+promoted\s+to\s+(pawn|bishop|knight|rook|queen|king)|promoted\s+to\s+(pawn|bishop|knight|rook|queen|king))[^)]*)\)',
+            query, re.IGNORECASE
+        )
+        
+        if promotion_match:
+            condition = promotion_match.group(1)
+            promoted_piece = self._extract_promoted_piece_from_query(condition)
+            move_condition = self._extract_move_condition_from_query(condition)
+            promotion_count = self._extract_promotion_count_from_query(condition)
+            
+            if not promoted_piece:
+                return []
+            
+            # Check if this is a player-specific promotion query
+            player_name = self._extract_player_name_from_query(condition)
+            
+            # Also check if there's a player condition in the broader query context
+            # Look for patterns like "(player_name won)" or "(player_name lost)" in the query
+            broader_player_match = re.search(r'\(([^)]*\b(\w+)\s+(won|lost|drew)[^)]*)\)', query, re.IGNORECASE)
+            if broader_player_match and not player_name:
+                broader_player_name = broader_player_match.group(2)
+                # Check if this broader player name is not a chess term
+                if broader_player_name.lower() not in ['won', 'lost', 'drew', 'win', 'loss', 'draw', 'and', 'or', 'where', '(', ')', 
+                                                     'pawn', 'bishop', 'knight', 'rook', 'queen', 'king', 'promoted', 'to', 'exchanged', 'sacrificed']:
+                    player_name = broader_player_name
+            
+            # If still no player name, look for preprocessed SQL patterns like "white_player = 'player_name'"
+            if not player_name:
+                preprocessed_player_match = re.search(r"white_player\s*=\s*['\"]([^'\"]+)['\"]", query)
+                if preprocessed_player_match:
+                    player_name = preprocessed_player_match.group(1)
+            
+            if player_name:
+                # Player-specific promotion - need to determine which side made the promotion
+                # White promotes to rank 8 (e.g., e8=Q), Black promotes to rank 1 (e.g., e1=Q)
+                # Use individual patterns for each file since SQLite LIKE doesn't support [a-h]
+                files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+                white_conditions = []
+                black_conditions = []
+                
+                for file in files:
+                    white_conditions.append(f"g2.moves LIKE '%{file}8={promoted_piece.upper()}%'")
+                    black_conditions.append(f"g2.moves LIKE '%{file}1={promoted_piece.upper()}%'")
+                
+                white_pattern = ' OR '.join(white_conditions)
+                black_pattern = ' OR '.join(black_conditions)
+                
+                # Handle promotion count
+                if promotion_count:
+                    # Count the number of promotions for the specific player
+                    # We need to count only the promotions made by the specific player
+                    if promoted_piece.upper() == 'Q':
+                        # For queen promotions, count 8=Q for white, 1=Q for black
+                        subquery = f"""
+                            EXISTS (
+                                SELECT 1 FROM games g2 
+                                WHERE g2.id = games.id 
+                                AND (
+                                    (g2.white_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '8=Q', ''))) / 3 >= {promotion_count}
+                                        AND ({white_pattern})
+                                    ))
+                                    OR 
+                                    (g2.black_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '1=Q', ''))) / 3 >= {promotion_count}
+                                        AND ({black_pattern})
+                                    ))
+                                )
+                            )
+                        """
+                    elif promoted_piece.upper() == 'N':
+                        # For knight promotions, count 8=N for white, 1=N for black
+                        subquery = f"""
+                            EXISTS (
+                                SELECT 1 FROM games g2 
+                                WHERE g2.id = games.id 
+                                AND (
+                                    (g2.white_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '8=N', ''))) / 3 >= {promotion_count}
+                                        AND ({white_pattern})
+                                    ))
+                                    OR 
+                                    (g2.black_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '1=N', ''))) / 3 >= {promotion_count}
+                                        AND ({black_pattern})
+                                    ))
+                                )
+                            )
+                        """
+                    elif promoted_piece.upper() == 'R':
+                        # For rook promotions, count 8=R for white, 1=R for black
+                        subquery = f"""
+                            EXISTS (
+                                SELECT 1 FROM games g2 
+                                WHERE g2.id = games.id 
+                                AND (
+                                    (g2.white_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '8=R', ''))) / 3 >= {promotion_count}
+                                        AND ({white_pattern})
+                                    ))
+                                    OR 
+                                    (g2.black_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '1=R', ''))) / 3 >= {promotion_count}
+                                        AND ({black_pattern})
+                                    ))
+                                )
+                            )
+                        """
+                    elif promoted_piece.upper() == 'B':
+                        # For bishop promotions, count 8=B for white, 1=B for black
+                        subquery = f"""
+                            EXISTS (
+                                SELECT 1 FROM games g2 
+                                WHERE g2.id = games.id 
+                                AND (
+                                    (g2.white_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '8=B', ''))) / 3 >= {promotion_count}
+                                        AND ({white_pattern})
+                                    ))
+                                    OR 
+                                    (g2.black_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '1=B', ''))) / 3 >= {promotion_count}
+                                        AND ({black_pattern})
+                                    ))
+                                )
+                            )
+                        """
+                    else:
+                        # For other pieces, use generic pattern
+                        count_pattern = f"={promoted_piece.upper()}"
+                        subquery = f"""
+                            EXISTS (
+                                SELECT 1 FROM games g2 
+                                WHERE g2.id = games.id 
+                                AND (
+                                    (g2.white_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '{count_pattern}', ''))) / LENGTH('{count_pattern}') >= {promotion_count}
+                                        AND ({white_pattern})
+                                    ))
+                                    OR 
+                                    (g2.black_player = '{player_name}' AND (
+                                        (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '{count_pattern}', ''))) / LENGTH('{count_pattern}') >= {promotion_count}
+                                        AND ({black_pattern})
+                                    ))
+                                )
+                            )
+                        """
+                else:
+                    # No count specified - just check if promotion exists
+                    subquery = f"""
+                        EXISTS (
+                            SELECT 1 FROM games g2 
+                            WHERE g2.id = games.id 
+                            AND (
+                                (g2.white_player = '{player_name}' AND ({white_pattern}))
+                                OR 
+                                (g2.black_player = '{player_name}' AND ({black_pattern}))
+                            )
+                        )
+                    """
+            else:
+                # General promotion query - any player can promote
+                promotion_pattern = f"={promoted_piece.upper()}"
+                if promotion_count:
+                    # Count the number of promotions
+                    subquery = f"""
+                        EXISTS (
+                            SELECT 1 FROM games g2 
+                            WHERE g2.id = games.id 
+                            AND (LENGTH(g2.moves) - LENGTH(REPLACE(g2.moves, '{promotion_pattern}', ''))) / LENGTH('{promotion_pattern}') >= {promotion_count}
+                        )
+                    """
+                else:
+                    # No count specified - just check if promotion exists
+                    subquery = f"""
+                        EXISTS (
+                            SELECT 1 FROM games g2 
+                            WHERE g2.id = games.id 
+                            AND g2.moves LIKE '%{promotion_pattern}%'
+                        )
+                    """
+            
+            # Replace the condition with the subquery
+            modified_query = query.replace(promotion_match.group(0), subquery)
             return self.db.execute_sql_query(modified_query)
         
         # Check for player-specific exchange/sacrifice patterns
@@ -380,7 +575,12 @@ class ChessQueryLanguage:
         # Look for unquoted words (simplified)
         words = query.split()
         for word in words:
-            if word.lower() not in ['won', 'lost', 'drew', 'win', 'loss', 'draw', 'and', 'or', 'where', '(', ')']:
+            # Skip numbers and exclude common chess terms, piece names, and count words
+            if word.isdigit():
+                continue
+            if word.lower() not in ['won', 'lost', 'drew', 'win', 'loss', 'draw', 'and', 'or', 'where', '(', ')', 
+                                  'pawn', 'bishop', 'knight', 'rook', 'queen', 'king', 'promoted', 'to', 'exchanged', 'sacrificed',
+                                  'once', 'twice', 'thrice', 'times', 'time', 'x']:
                 return word
         
         return None
@@ -448,6 +648,41 @@ class ChessQueryLanguage:
                 for piece_name, piece_symbol in piece_mapping.items():
                     if piece_name in captured_part:
                         return piece_symbol
+        
+        return None
+    
+    def _extract_promoted_piece_from_query(self, query: str) -> str:
+        """Extract promoted piece from query."""
+        piece_mapping = {
+            'pawn': 'P',
+            'bishop': 'B', 
+            'knight': 'N',
+            'rook': 'R',
+            'queen': 'Q',
+            'king': 'K'
+        }
+        
+        query_lower = query.lower()
+        
+        # Look for "promoted to X" pattern
+        if 'promoted to' in query_lower:
+            parts = query_lower.split('promoted to')
+            if len(parts) > 1:
+                promoted_part = parts[1].strip()
+                for piece_name, piece_symbol in piece_mapping.items():
+                    if piece_name in promoted_part:
+                        return piece_symbol
+        
+        return None
+    
+    def _extract_promotion_count_from_query(self, query: str) -> Optional[int]:
+        """Extract promotion count from query (x N format)."""
+        import re
+        
+        # Look for "x N" pattern (e.g., "x 2", "x 3")
+        count_match = re.search(r'x\s+(\d+)', query.lower())
+        if count_match:
+            return int(count_match.group(1))
         
         return None
     

@@ -43,6 +43,7 @@ CRITICAL RULES:
 8. For player-specific sacrifices: combine (player won/lost) AND (piece sacrificed) patterns
 9. Reference player is '{reference_player}' - use this for opponent queries
 10. For ELO ratings: Use white_elo or black_elo columns, NOT player_elo. Check both white_player and black_player to determine which ELO column to use
+11. For pawn promotions: Use (pawn promoted to piece) syntax, NOT (player piece promoted). When player promotes, combine (player won) AND (pawn promoted to piece)
 
 Available tables and fields:
 - games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
@@ -52,6 +53,7 @@ Special query patterns:
 - Player results: (player_name won/lost/drew) for player outcomes
 - Piece events: (piece exchanged/sacrificed) for piece exchanges/sacrifices
 - Captures: (piece1 captured piece2) for specific captures
+- Pawn promotions: (pawn promoted to piece) for pawn promotions
 - Move conditions: Add "before move N" or "after move N" for timing
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
 
@@ -75,6 +77,17 @@ EXAMPLES:
 - "Show games where {reference_player} won and sacrificed queen" → SELECT * FROM games WHERE ({reference_player} won) AND (queen sacrificed)
 - "Games where {reference_player} was rated over 1500" → SELECT * FROM games WHERE ((white_player = '{reference_player}' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = '{reference_player}' AND CAST(black_elo AS INTEGER) > 1500))
 - "Count games where {reference_player} sacrificed queen and lost when rated over 1500" → SELECT COUNT(*) FROM games WHERE ({reference_player} lost) AND ({reference_player} queen sacrificed) AND ((white_player = '{reference_player}' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = '{reference_player}' AND CAST(black_elo AS INTEGER) > 1500))
+- "Find games where pawn was promoted to queen" → SELECT * FROM games WHERE (pawn promoted to queen)
+- "Count games with pawn promotions to knight" → SELECT COUNT(*) FROM games WHERE (pawn promoted to knight)
+- "Show games where {reference_player} promoted pawn to queen" → SELECT * FROM games WHERE ({reference_player} won) AND (pawn promoted to queen)
+- "Find games with pawn promotions before move 30" → SELECT * FROM games WHERE (pawn promoted to queen before move 30)
+- "Show site from games where {reference_player} promoted to a knight" → SELECT site FROM games WHERE ({reference_player} won) AND (pawn promoted to knight)
+- "Games where {reference_player} promoted to queen" → SELECT * FROM games WHERE ({reference_player} won) AND (pawn promoted to queen)
+- "Count games where {reference_player} promoted to rook" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND (pawn promoted to rook)
+- "Games where {reference_player} promoted to queen twice" → SELECT * FROM games WHERE ({reference_player} won) AND (pawn promoted to queen x 2)
+- "Show site from games where {reference_player} promoted to queen twice" → SELECT site FROM games WHERE ({reference_player} won) AND (pawn promoted to queen x 2)
+- "Count games where {reference_player} promoted to queen x 3" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND (pawn promoted to queen x 3)
+- "Find games where pawn was promoted to knight x 2" → SELECT * FROM games WHERE (pawn promoted to knight x 2)
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
