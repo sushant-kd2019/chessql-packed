@@ -29,11 +29,12 @@ class ChessPieceAnalyzer:
         'K': Piece('K', 'king', 0),  # King has no exchange value
     }
     
-    def __init__(self):
+    def __init__(self, reference_player: str = "lecorvus"):
         """Initialize the enhanced piece analyzer."""
         self.piece_values = {piece.symbol: piece.value for piece in self.PIECES.values()}
         self.piece_names = {piece.symbol: piece.name for piece in self.PIECES.values()}
         self.board = self._init_board()
+        self.reference_player = reference_player
     
     def _init_board(self):
         """Initialize starting chess board position."""
@@ -425,10 +426,13 @@ class ChessPieceAnalyzer:
         
         return False
     
-    def analyze_captures(self, moves_text: str, white_player: str = None, black_player: str = None) -> List[Dict[str, Any]]:
+    def analyze_captures(self, moves_text: str, white_player: str = None, black_player: str = None, reference_player: str = None) -> List[Dict[str, Any]]:
         """Analyze moves to find all captures with detailed information."""
         moves = self.parse_moves_with_captures(moves_text)
         captures = []
+        
+        # Use provided reference_player or fall back to instance default
+        ref_player = reference_player or self.reference_player
         
         for move in moves:
             if move['white_capture']:
@@ -441,11 +445,11 @@ class ChessPieceAnalyzer:
                 captures.append(move['black_capture'])
         
         # Analyze sacrifices by looking at consecutive captures
-        self._analyze_sacrifices(captures)
+        self._analyze_sacrifices(captures, ref_player)
         
         return captures
     
-    def _analyze_sacrifices(self, captures: List[Dict[str, Any]]) -> None:
+    def _analyze_sacrifices(self, captures: List[Dict[str, Any]], reference_player: str) -> None:
         """Analyze sacrifices by looking at queen captures and opponent queen status."""
         # Reset all sacrifice flags first
         for capture in captures:
@@ -468,93 +472,95 @@ class ChessPieceAnalyzer:
             for capture in current_captures:
                 if capture['captured_piece'] == 'Q':
                     # Check if this is a queen sacrifice
-                    # A queen sacrifice means: lecorvus' queen is captured AND opponent's queen survives
-                    if self._is_queen_sacrifice(capture, captures_by_move, move_num):
+                    # A queen sacrifice means: reference player's queen is captured AND opponent's queen survives
+                    if self._is_queen_sacrifice(capture, captures_by_move, move_num, reference_player):
                         capture['is_sacrifice'] = True
-                    elif self._is_queen_exchange(capture, captures_by_move, move_num):
+                    elif self._is_queen_exchange(capture, captures_by_move, move_num, reference_player):
                         capture['is_exchange'] = True
     
-    def _is_queen_sacrifice(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:
+    def _is_queen_sacrifice(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int, reference_player: str) -> bool:
         """Check if a queen capture is a sacrifice (opponent's queen survives)."""
         # Get the side that captured the queen
         capturing_side = queen_capture['side']
-        lecorvus_side = 'white' if queen_capture.get('white_player') == 'lecorvus' else 'black'
+        ref_player_side = 'white' if queen_capture.get('white_player') == reference_player else 'black'
         
-        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen soon after
-        if capturing_side != lecorvus_side:
-            # lecorvus' queen was captured - check if lecorvus captures opponent's queen soon after
+        # If reference player's queen was captured, check if reference player captures opponent's queen soon after
+        if capturing_side != ref_player_side:
+            # reference player's queen was captured - check if reference player captures opponent's queen soon after
             for check_move in range(move_num, min(move_num + 3, max(captures_by_move.keys()) + 1)):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
-                            # lecorvus captured opponent's queen soon after, so this is not a sacrifice
+                        if capture['side'] == ref_player_side and capture['captured_piece'] == 'Q':
+                            # reference player captured opponent's queen soon after, so this is not a sacrifice
                             return False
             
-            # Also check if lecorvus captured opponent's queen before this move
+            # Also check if reference player captured opponent's queen before this move
             for check_move in range(1, move_num):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
-                            # lecorvus already captured opponent's queen earlier, so this is not a sacrifice
+                        if capture['side'] == ref_player_side and capture['captured_piece'] == 'Q':
+                            # reference player already captured opponent's queen earlier, so this is not a sacrifice
                             return False
             
-            # If we get here, lecorvus didn't capture opponent's queen before or soon after, so this is a sacrifice
+            # If we get here, reference player didn't capture opponent's queen before or soon after, so this is a sacrifice
             return True
         
-        # If opponent's queen was captured, check if opponent captures lecorvus' queen soon after
-        elif capturing_side == lecorvus_side:
-            # opponent's queen was captured - check if opponent captures lecorvus' queen soon after
+        # If opponent's queen was captured, check if opponent captures reference player's queen soon after
+        elif capturing_side == ref_player_side:
+            # opponent's queen was captured - check if opponent captures reference player's queen soon after
             for check_move in range(move_num, min(move_num + 3, max(captures_by_move.keys()) + 1)):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
-                            # opponent captured lecorvus' queen soon after, so this is not a sacrifice
+                        if capture['side'] != ref_player_side and capture['captured_piece'] == 'Q':
+                            # opponent captured reference player's queen soon after, so this is not a sacrifice
                             return False
             
-            # Also check if opponent captured lecorvus' queen before this move
+            # Also check if opponent captured reference player's queen before this move
             for check_move in range(1, move_num):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
-                            # opponent already captured lecorvus' queen earlier, so this is not a sacrifice
+                        if capture['side'] != ref_player_side and capture['captured_piece'] == 'Q':
+                            # opponent already captured reference player's queen earlier, so this is not a sacrifice
                             return False
             
-            # If we get here, opponent didn't capture lecorvus' queen before or soon after, so this is a sacrifice
+            # If we get here, opponent didn't capture reference player's queen before or soon after, so this is a sacrifice
             return True
         
         return False
     
-    def _is_queen_exchange(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:
+    def _is_queen_exchange(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int, reference_player: str) -> bool:
         """Check if a queen capture is an exchange (opponent's queen is captured in same move or soon after)."""
         # Get the side that captured the queen
         capturing_side = queen_capture['side']
-        lecorvus_side = 'white' if queen_capture.get('white_player') == 'lecorvus' else 'black'
+        ref_player_side = 'white' if queen_capture.get('white_player') == reference_player else 'black'
         
-        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen in same move or soon after
-        if capturing_side != lecorvus_side:
-            # lecorvus' queen was captured - check if lecorvus captures opponent's queen in same move or soon after
+        # If reference player's queen was captured, check if reference player captures opponent's queen in same move or soon after
+        if capturing_side != ref_player_side:
+            # reference player's queen was captured - check if reference player captures opponent's queen in same move or soon after
             for check_move in range(move_num, min(move_num + 2, max(captures_by_move.keys()) + 1)):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
-                            # lecorvus captured opponent's queen in same move or soon after, so this is an exchange
+                        if capture['side'] == ref_player_side and capture['captured_piece'] == 'Q':
+                            # reference player captured opponent's queen in same move or soon after, so this is an exchange
                             return True
         
-        # If opponent's queen was captured, check if opponent captures lecorvus' queen in same move or soon after
-        elif capturing_side == lecorvus_side:
-            # opponent's queen was captured - check if opponent captures lecorvus' queen in same move or soon after
+        # If opponent's queen was captured, check if opponent captures reference player's queen in same move or soon after
+        elif capturing_side == ref_player_side:
+            # opponent's queen was captured - check if opponent captures reference player's queen in same move or soon after
             for check_move in range(move_num, min(move_num + 2, max(captures_by_move.keys()) + 1)):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
-                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
-                            # opponent captured lecorvus' queen in same move or soon after, so this is an exchange
+                        if capture['side'] != ref_player_side and capture['captured_piece'] == 'Q':
+                            # opponent captured reference player's queen in same move or soon after, so this is an exchange
                             return True
         
         return False
     
-    def get_capture_statistics(self, moves_text: str) -> Dict[str, Any]:
+    def get_capture_statistics(self, moves_text: str, reference_player: str = None) -> Dict[str, Any]:
         """Get statistics about captures in a game."""
-        captures = self.analyze_captures(moves_text)
+        # Use provided reference_player or fall back to instance default
+        ref_player = reference_player or self.reference_player
+        captures = self.analyze_captures(moves_text, reference_player=ref_player)
         
         stats = {
             'total_captures': len(captures),
