@@ -102,7 +102,7 @@ python server.py
 
 The server provides two main endpoints:
 - **`/cql`**: Execute ChessQL queries (SQL + chess patterns)
-- **`/query`**: Execute natural language queries
+- **`/ask`**: Execute natural language queries
 
 API Documentation: http://localhost:9090/docs
 
@@ -115,7 +115,9 @@ Execute ChessQL queries (SQL + chess patterns).
 ```json
 {
   "query": "SELECT COUNT(*) FROM games WHERE (lecorvus won)",
-  "limit": 100
+  "limit": 100,
+  "page_no": 1,
+  "offset": 0
 }
 ```
 
@@ -125,19 +127,28 @@ Execute ChessQL queries (SQL + chess patterns).
   "success": true,
   "results": [{"COUNT(*)": 825}],
   "count": 1,
+  "total_count": 1,
+  "page_no": 1,
+  "limit": 100,
+  "offset": 0,
+  "total_pages": 1,
+  "has_next": false,
+  "has_prev": false,
   "query": "SELECT COUNT(*) FROM games WHERE (lecorvus won)",
   "error": null
 }
 ```
 
-#### POST `/query`
+#### POST `/ask`
 Execute natural language queries.
 
 **Request Body:**
 ```json
 {
   "question": "Show me games where lecorvus won",
-  "limit": 10
+  "limit": 10,
+  "page_no": 1,
+  "offset": 0
 }
 ```
 
@@ -147,6 +158,13 @@ Execute natural language queries.
   "success": true,
   "results": [...],
   "count": 10,
+  "total_count": 825,
+  "page_no": 1,
+  "limit": 10,
+  "offset": 0,
+  "total_pages": 83,
+  "has_next": true,
+  "has_prev": false,
   "query": "Show me games where lecorvus won",
   "error": null
 }
@@ -158,18 +176,49 @@ Health check endpoint.
 #### GET `/examples`
 Get example queries for both endpoints.
 
+### Pagination Parameters
+
+Both `/cql` and `/ask` endpoints support pagination with the following parameters:
+
+- **`page_no`** (optional): Page number (1-based, default: 1)
+- **`limit`** (optional): Results per page (default: 100)
+- **`offset`** (optional): Direct offset (overrides page_no if provided)
+
+**Pagination Logic:**
+- If `offset` is provided, it takes precedence over `page_no`
+- If only `page_no` is provided, `offset = (page_no - 1) * limit`
+- Response includes pagination metadata: `total_count`, `total_pages`, `has_next`, `has_prev`
+
+**Example Pagination Scenarios:**
+```bash
+# Page-based pagination
+curl -X POST "http://localhost:9090/cql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT * FROM games", "page_no": 2, "limit": 5}'
+
+# Offset-based pagination
+curl -X POST "http://localhost:9090/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Show me games", "offset": 10, "limit": 3}'
+
+# Default pagination (page 1, limit 100)
+curl -X POST "http://localhost:9090/cql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT * FROM games"}'
+```
+
 ### API Usage Examples
 
 ```bash
-# ChessQL query
+# ChessQL query with pagination
 curl -X POST "http://localhost:9090/cql" \
   -H "Content-Type: application/json" \
-  -d '{"query": "SELECT COUNT(*) FROM games WHERE (queen sacrificed)", "limit": 5}'
+  -d '{"query": "SELECT COUNT(*) FROM games WHERE (queen sacrificed)", "page_no": 1, "limit": 5}'
 
-# Natural language query
-curl -X POST "http://localhost:9090/query" \
+# Natural language query with pagination
+curl -X POST "http://localhost:9090/ask" \
   -H "Content-Type: application/json" \
-  -d '{"question": "Find games where lecorvus promoted to queen x 2", "limit": 3}'
+  -d '{"question": "Find games where lecorvus promoted to queen x 2", "page_no": 1, "limit": 3}'
 
 # Health check
 curl -X GET "http://localhost:9090/health"
