@@ -98,11 +98,10 @@ class ChessPieceAnalyzer:
                 white_move = move_parts[0] if len(move_parts) > 0 else ''
                 black_move = move_parts[1] if len(move_parts) > 1 else ''
                 
-                # Parse white move (both regular and capture)
-                white_capture = self._parse_move(white_move, 'white', int(move_num))
-                
-                # Parse black move (both regular and capture)
-                black_capture = self._parse_move(black_move, 'black', int(move_num)) if black_move else None
+                # Parse both moves together to handle simultaneous captures correctly
+                white_capture, black_capture = self._parse_move_pair(
+                    white_move, black_move, 'white', 'black', int(move_num)
+                )
                 
                 moves.append({
                     'move_number': int(move_num),
@@ -114,34 +113,57 @@ class ChessPieceAnalyzer:
         
         return moves
     
-    def _parse_move(self, move: str, side: str, move_number: int) -> Optional[Dict[str, Any]]:
+    def _parse_move_pair(self, white_move: str, black_move: str, white_side: str, black_side: str, move_number: int) -> tuple:
+        """Parse a pair of moves (white and black) sequentially."""
+        white_capture = None
+        black_capture = None
+        
+        # Handle castling first
+        if white_move in ['O-O', 'O-O-O']:
+            self._handle_castling(white_move, white_side)
+        elif black_move in ['O-O', 'O-O-O']:
+            self._handle_castling(black_move, black_side)
+        
+        # Parse white move first
+        if white_move and white_move not in ['O-O', 'O-O-O']:
+            white_capture = self._parse_single_move(white_move, white_side, move_number)
+        
+        # Parse black move second (board state has been updated by white move)
+        if black_move and black_move not in ['O-O', 'O-O-O']:
+            black_capture = self._parse_single_move(black_move, black_side, move_number)
+        
+        return white_capture, black_capture
+    
+    def _handle_castling(self, move: str, side: str):
+        """Handle castling moves."""
+        if move == 'O-O':
+            # Kingside castling
+            if side == 'white':
+                self.board['e1'] = None
+                self.board['f1'] = 'R'
+                self.board['g1'] = 'K'
+                self.board['h1'] = None
+            else:
+                self.board['e8'] = None
+                self.board['f8'] = 'r'
+                self.board['g8'] = 'k'
+                self.board['h8'] = None
+        elif move == 'O-O-O':
+            # Queenside castling
+            if side == 'white':
+                self.board['e1'] = None
+                self.board['d1'] = 'R'
+                self.board['c1'] = 'K'
+                self.board['a1'] = None
+            else:
+                self.board['e8'] = None
+                self.board['d8'] = 'r'
+                self.board['c8'] = 'k'
+                self.board['a8'] = None
+    
+    def _parse_single_move(self, move: str, side: str, move_number: int) -> Optional[Dict[str, Any]]:
         """Parse a single move and update board position. Return capture info if it's a capture."""
         if not move or move in ['O-O', 'O-O-O']:
-            # Handle castling
-            if move == 'O-O':
-                # Kingside castling
-                if side == 'white':
-                    self.board['e1'] = None
-                    self.board['f1'] = 'R'
-                    self.board['g1'] = 'K'
-                    self.board['h1'] = None
-                else:
-                    self.board['e8'] = None
-                    self.board['f8'] = 'r'
-                    self.board['g8'] = 'k'
-                    self.board['h8'] = None
-            elif move == 'O-O-O':
-                # Queenside castling
-                if side == 'white':
-                    self.board['e1'] = None
-                    self.board['d1'] = 'R'
-                    self.board['c1'] = 'K'
-                    self.board['a1'] = None
-                else:
-                    self.board['e8'] = None
-                    self.board['d8'] = 'r'
-                    self.board['c8'] = 'k'
-                    self.board['a8'] = None
             return None
         
         # Extract piece and destination
@@ -159,6 +181,7 @@ class ChessPieceAnalyzer:
             # Determine what piece is being captured
             captured_piece = self.board.get(destination)
             if not captured_piece:
+                # If no piece on destination, this might be en passant or an error
                 return None
             
             # Convert to uppercase for consistency
@@ -191,11 +214,14 @@ class ChessPieceAnalyzer:
                 'is_sacrifice': is_sacrifice,
             }
         else:
-            # Regular move - update board position
+            # Regular move (no capture) - still update board
             self.board[destination] = piece if side == 'white' else piece.lower()
             if source_square:
                 self.board[source_square] = None
-            return None
+        
+        return None
+    
+    # Old _parse_move method removed - now using _parse_single_move
     
     def _parse_capture_move(self, move: str, side: str, move_number: int) -> Optional[Dict[str, Any]]:
         """Parse a single move and determine if it's a capture."""
@@ -347,8 +373,48 @@ class ChessPieceAnalyzer:
     
     def _can_piece_move_from_square(self, piece: str, source: str, destination: str, side: str) -> bool:
         """Check if a piece can legally move from source to destination."""
-        # This is a simplified check - in a real engine this would be more complex
-        return True  # Simplified for now
+        if not source or not destination:
+            return False
+        
+        source_file, source_rank = source[0], int(source[1])
+        dest_file, dest_rank = destination[0], int(destination[1])
+        
+        file_diff = abs(ord(dest_file) - ord(source_file))
+        rank_diff = abs(dest_rank - source_rank)
+        
+        if piece == 'N':
+            # Knight moves in L-shape: 2 squares in one direction, 1 in the other
+            return (file_diff == 2 and rank_diff == 1) or (file_diff == 1 and rank_diff == 2)
+        elif piece == 'P':
+            # Pawn moves forward (simplified - not handling en passant or promotion)
+            if side == 'white':
+                if source_rank == 2:
+                    # Can move 1 or 2 squares forward from starting position
+                    return file_diff == 0 and (rank_diff == 1 or rank_diff == 2)
+                else:
+                    # Can move 1 square forward
+                    return file_diff == 0 and rank_diff == 1 and dest_rank > source_rank
+            else:
+                if source_rank == 7:
+                    # Can move 1 or 2 squares forward from starting position
+                    return file_diff == 0 and (rank_diff == 1 or rank_diff == 2)
+                else:
+                    # Can move 1 square forward
+                    return file_diff == 0 and rank_diff == 1 and dest_rank < source_rank
+        elif piece == 'R':
+            # Rook moves horizontally or vertically
+            return file_diff == 0 or rank_diff == 0
+        elif piece == 'B':
+            # Bishop moves diagonally
+            return file_diff == rank_diff
+        elif piece == 'Q':
+            # Queen moves like rook or bishop
+            return file_diff == 0 or rank_diff == 0 or file_diff == rank_diff
+        elif piece == 'K':
+            # King moves one square in any direction
+            return file_diff <= 1 and rank_diff <= 1
+        
+        return False
     
     def analyze_captures(self, moves_text: str, white_player: str = None, black_player: str = None) -> List[Dict[str, Any]]:
         """Analyze moves to find all captures with detailed information."""
@@ -450,19 +516,29 @@ class ChessPieceAnalyzer:
         return False
     
     def _is_queen_exchange(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:
-        """Check if a queen capture is an exchange (opponent's queen is captured soon after)."""
+        """Check if a queen capture is an exchange (opponent's queen is captured in same move or soon after)."""
         # Get the side that captured the queen
         capturing_side = queen_capture['side']
         lecorvus_side = 'white' if queen_capture.get('white_player') == 'lecorvus' else 'black'
         
-        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen soon after
+        # If lecorvus' queen was captured, check if lecorvus captures opponent's queen in same move or soon after
         if capturing_side != lecorvus_side:
-            # lecorvus' queen was captured - check if lecorvus captures opponent's queen soon after
+            # lecorvus' queen was captured - check if lecorvus captures opponent's queen in same move or soon after
             for check_move in range(move_num, min(move_num + 2, max(captures_by_move.keys()) + 1)):
                 if check_move in captures_by_move:
                     for capture in captures_by_move[check_move]:
                         if capture['side'] == lecorvus_side and capture['captured_piece'] == 'Q':
-                            # lecorvus captured opponent's queen soon after, so this is an exchange
+                            # lecorvus captured opponent's queen in same move or soon after, so this is an exchange
+                            return True
+        
+        # If opponent's queen was captured, check if opponent captures lecorvus' queen in same move or soon after
+        elif capturing_side == lecorvus_side:
+            # opponent's queen was captured - check if opponent captures lecorvus' queen in same move or soon after
+            for check_move in range(move_num, min(move_num + 2, max(captures_by_move.keys()) + 1)):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
+                            # opponent captured lecorvus' queen in same move or soon after, so this is an exchange
                             return True
         
         return False
