@@ -117,6 +117,31 @@ class ChessPieceAnalyzer:
     def _parse_move(self, move: str, side: str, move_number: int) -> Optional[Dict[str, Any]]:
         """Parse a single move and update board position. Return capture info if it's a capture."""
         if not move or move in ['O-O', 'O-O-O']:
+            # Handle castling
+            if move == 'O-O':
+                # Kingside castling
+                if side == 'white':
+                    self.board['e1'] = None
+                    self.board['f1'] = 'R'
+                    self.board['g1'] = 'K'
+                    self.board['h1'] = None
+                else:
+                    self.board['e8'] = None
+                    self.board['f8'] = 'r'
+                    self.board['g8'] = 'k'
+                    self.board['h8'] = None
+            elif move == 'O-O-O':
+                # Queenside castling
+                if side == 'white':
+                    self.board['e1'] = None
+                    self.board['d1'] = 'R'
+                    self.board['c1'] = 'K'
+                    self.board['a1'] = None
+                else:
+                    self.board['e8'] = None
+                    self.board['d8'] = 'r'
+                    self.board['c8'] = 'k'
+                    self.board['a8'] = None
             return None
         
         # Extract piece and destination
@@ -125,6 +150,9 @@ class ChessPieceAnalyzer:
         
         if not destination:
             return None
+        
+        # Determine source square
+        source_square = self._determine_source_square(move, piece, destination, side)
         
         # Check if it's a capture
         if 'x' in move:
@@ -136,22 +164,18 @@ class ChessPieceAnalyzer:
             # Convert to uppercase for consistency
             captured_piece = captured_piece.upper()
             
-            # Determine source square (simplified)
-            source_square = self._determine_source_square(move, piece, destination, side)
-            
             # Update board
             self.board[destination] = piece if side == 'white' else piece.lower()
             if source_square:
                 self.board[source_square] = None
             
-            # Determine if it's an exchange or sacrifice
+            # Get piece values for later analysis
             piece_value = self.piece_values.get(piece, 0)
             captured_value = self.piece_values.get(captured_piece, 0)
             
-            is_exchange = piece_value == captured_value
-            # A sacrifice is when you lose a higher-valued piece for a lower-valued piece
-            # This happens when the captured piece is worth more than the capturing piece
-            is_sacrifice = captured_value > piece_value
+            # Initial values - will be updated by _analyze_sacrifices
+            is_exchange = False
+            is_sacrifice = False
             
             return {
                 'move_number': move_number,
@@ -167,8 +191,10 @@ class ChessPieceAnalyzer:
                 'is_sacrifice': is_sacrifice,
             }
         else:
-            # Regular move - just update board position
+            # Regular move - update board position
             self.board[destination] = piece if side == 'white' else piece.lower()
+            if source_square:
+                self.board[source_square] = None
             return None
     
     def _parse_capture_move(self, move: str, side: str, move_number: int) -> Optional[Dict[str, Any]]:
@@ -258,13 +284,71 @@ class ChessPieceAnalyzer:
         return None
     
     def _determine_source_square(self, move: str, piece: str, destination: str, side: str) -> Optional[str]:
-        """Determine source square for a move (simplified)."""
-        # This is a simplified implementation
-        # In a real chess engine, this would require complex position analysis
+        """Determine source square for a move."""
+        # Handle special cases
+        if move in ['O-O', 'O-O-O']:
+            return None
         
-        # For now, we'll use a simple heuristic
-        # This is not perfect but better than nothing
-        return None  # We'll leave this as None for now
+        # Find all squares where this piece could be
+        possible_sources = []
+        piece_symbol = piece if side == 'white' else piece.lower()
+        
+        for square, board_piece in self.board.items():
+            if board_piece == piece_symbol:
+                possible_sources.append(square)
+        
+        if not possible_sources:
+            return None
+        
+        # If only one possible source, use it
+        if len(possible_sources) == 1:
+            return possible_sources[0]
+        
+        # For moves with disambiguation (like Nbd2, R1a1, etc.)
+        if len(move) > 3 and move[1] in 'abcdefgh12345678':
+            disambiguation = move[1]
+            if disambiguation in 'abcdefgh':
+                # File disambiguation (e.g., Nbd2)
+                for square in possible_sources:
+                    if square[0] == disambiguation:
+                        return square
+            elif disambiguation in '12345678':
+                # Rank disambiguation (e.g., N1d2)
+                for square in possible_sources:
+                    if square[1] == disambiguation:
+                        return square
+        
+        # For captures, try to find the piece that can legally capture on the destination
+        if 'x' in move:
+            for square in possible_sources:
+                if self._can_piece_capture_from_square(piece, square, destination, side):
+                    return square
+        
+        # For regular moves, try to find the piece that can legally move to the destination
+        for square in possible_sources:
+            if self._can_piece_move_from_square(piece, square, destination, side):
+                return square
+        
+        # If we can't determine, return the first possible source
+        return possible_sources[0]
+    
+    def _can_piece_capture_from_square(self, piece: str, source: str, destination: str, side: str) -> bool:
+        """Check if a piece can legally capture from source to destination."""
+        # This is a simplified check - in a real engine this would be more complex
+        if piece == 'P':
+            # Pawn capture
+            if side == 'white':
+                return (ord(destination[0]) - ord(source[0])) == 1 and (int(destination[1]) - int(source[1])) == 1
+            else:
+                return (ord(destination[0]) - ord(source[0])) == 1 and (int(source[1]) - int(destination[1])) == 1
+        else:
+            # For other pieces, just check if it's a reasonable distance
+            return True  # Simplified for now
+    
+    def _can_piece_move_from_square(self, piece: str, source: str, destination: str, side: str) -> bool:
+        """Check if a piece can legally move from source to destination."""
+        # This is a simplified check - in a real engine this would be more complex
+        return True  # Simplified for now
     
     def analyze_captures(self, moves_text: str, white_player: str = None, black_player: str = None) -> List[Dict[str, Any]]:
         """Analyze moves to find all captures with detailed information."""
