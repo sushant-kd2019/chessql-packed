@@ -342,6 +342,27 @@ class ChessPieceAnalyzer:
             # If we get here, lecorvus didn't capture opponent's queen before or soon after, so this is a sacrifice
             return True
         
+        # If opponent's queen was captured, check if opponent captures lecorvus' queen soon after
+        elif capturing_side == lecorvus_side:
+            # opponent's queen was captured - check if opponent captures lecorvus' queen soon after
+            for check_move in range(move_num, min(move_num + 3, max(captures_by_move.keys()) + 1)):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
+                            # opponent captured lecorvus' queen soon after, so this is not a sacrifice
+                            return False
+            
+            # Also check if opponent captured lecorvus' queen before this move
+            for check_move in range(1, move_num):
+                if check_move in captures_by_move:
+                    for capture in captures_by_move[check_move]:
+                        if capture['side'] != lecorvus_side and capture['captured_piece'] == 'Q':
+                            # opponent already captured lecorvus' queen earlier, so this is not a sacrifice
+                            return False
+            
+            # If we get here, opponent didn't capture lecorvus' queen before or soon after, so this is a sacrifice
+            return True
+        
         return False
     
     def _is_queen_exchange(self, queen_capture: Dict[str, Any], captures_by_move: Dict[int, List[Dict]], move_num: int) -> bool:

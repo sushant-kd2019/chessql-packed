@@ -15,8 +15,9 @@ from natural_language_search import NaturalLanguageSearch
 
 @click.group(invoke_without_command=True)
 @click.option('--db', default='chess_games.db', help='Database file path')
+@click.option('--player', default='lecorvus', help='Reference player name for opponent queries')
 @click.pass_context
-def cli(ctx, db):
+def cli(ctx, db, player):
     """ChessQL - A chess game database query system.
     
     ChessQL allows you to query chess games using SQL, natural language, and pattern matching.
@@ -24,7 +25,7 @@ def cli(ctx, db):
     Examples:
       python cli.py                                    # Start interactive mode
       python cli.py query "SELECT * FROM games"       # Run SQL query
-      python cli.py ask "Show me lecorvus wins"       # Natural language query
+      python cli.py ask "Show me player wins"         # Natural language query
       python cli.py ingest sample_games.pgn           # Import PGN files
       python cli.py stats                             # Show database statistics
     
@@ -32,6 +33,7 @@ def cli(ctx, db):
     """
     ctx.ensure_object(dict)
     ctx.obj['db_path'] = db
+    ctx.obj['reference_player'] = player
     
     # If no command provided, start interactive mode
     if ctx.invoked_subcommand is None:
@@ -73,16 +75,17 @@ def query(ctx, query, output_format, limit):
     """Execute a query against the chess database.
     
     Query types:
-    - SQL queries: SELECT * FROM games WHERE white_player = 'lecorvus'
+    - SQL queries: SELECT * FROM games WHERE white_player = 'player_name'
     - Regex queries: /e4.*c5/ (for moves matching pattern)
     """
     db_path = ctx.obj['db_path']
+    reference_player = ctx.obj['reference_player']
     
     if not os.path.exists(db_path):
         click.echo(f"Error: Database '{db_path}' does not exist. Run 'ingest' first.")
         return
     
-    query_lang = ChessQueryLanguage(db_path)
+    query_lang = ChessQueryLanguage(db_path, reference_player)
     
     try:
         results = query_lang.execute_query(query)
@@ -130,7 +133,8 @@ def stats(ctx):
 @click.pass_context
 def examples(ctx):
     """Show example queries."""
-    query_lang = ChessQueryLanguage()
+    reference_player = ctx.obj['reference_player']
+    query_lang = ChessQueryLanguage(reference_player=reference_player)
     examples = query_lang.get_query_examples()
     
     click.echo("Example Queries:")
@@ -188,12 +192,13 @@ def show(ctx, game_id):
 def _start_interactive_mode(ctx):
     """Start interactive mode."""
     db_path = ctx.obj['db_path']
+    reference_player = ctx.obj['reference_player']
     
     if not os.path.exists(db_path):
         click.echo(f"Error: Database '{db_path}' does not exist. Run 'ingest' first.")
         return
     
-    query_lang = ChessQueryLanguage(db_path)
+    query_lang = ChessQueryLanguage(db_path, reference_player)
     nl_search = None  # Initialize lazily when needed
     
     click.echo("ChessQL Interactive Mode")
@@ -214,13 +219,13 @@ def _start_interactive_mode(ctx):
             elif user_input.lower() == 'stats':
                 _show_stats(query_lang)
             elif user_input.lower() == 'nl-examples':
-                _show_nl_examples()
+                _show_nl_examples(reference_player)
             elif user_input.lower().startswith('ask '):
                 # Natural language query with explicit 'ask' command
                 query = user_input[4:].strip()  # Remove 'ask ' prefix
                 if nl_search is None:
                     try:
-                        nl_search = NaturalLanguageSearch(db_path)
+                        nl_search = NaturalLanguageSearch(db_path, reference_player=reference_player)
                     except Exception as e:
                         click.echo(f"Error initializing natural language search: {e}")
                         click.echo("Make sure you have set your OPENAI_API_KEY environment variable.")
@@ -250,7 +255,7 @@ def _start_interactive_mode(ctx):
             click.echo(f"Error: {e}")
 
 
-def _show_nl_examples():
+def _show_nl_examples(reference_player: str = "lecorvus"):
     """Show natural language query examples."""
     click.echo("Natural Language Query Examples:")
     click.echo("=" * 50)
@@ -258,16 +263,16 @@ def _show_nl_examples():
     click.echo("")
     
     examples = [
-        "ask Show me games where lecorvus won",
+        f"ask Show me games where {reference_player} won",
         "ask Find games where queen was sacrificed", 
-        "ask Show me lecorvus wins with queen sacrifices",
+        f"ask Show me {reference_player} wins with queen sacrifices",
         "ask Find games where pawns were exchanged before move 10",
         "ask Show games sorted by ELO rating",
-        "ask Find games where lecorvus lost and knight was sacrificed",
+        f"ask Find games where {reference_player} lost and knight was sacrificed",
         "ask Show me the most recent games",
         "ask Find games with the highest ELO ratings",
         "ask Show me games where bishops were captured by knights",
-        "ask Find games where lecorvus drew"
+        f"ask Find games where {reference_player} drew"
     ]
     
     for i, example in enumerate(examples, 1):
@@ -292,7 +297,7 @@ Query Types & Examples:
 =======================
 
 1. SQL Queries (direct):
-   SELECT * FROM games WHERE white_player = 'lecorvus'
+   SELECT * FROM games WHERE white_player = 'player_name'
    SELECT COUNT(*) FROM games WHERE result = '1-0'
    SELECT white_player, black_player, result FROM games ORDER BY date_played DESC LIMIT 10
 
@@ -302,12 +307,12 @@ Query Types & Examples:
    /Q.*captured.*Q/        - Games with queen captures
 
 3. Natural Language (use 'ask' prefix):
-   ask Show me games where lecorvus won
+   ask Show me games where player won
    ask Find games where queen was sacrificed
-   ask Show me lecorvus wins with queen sacrifices
+   ask Show me player wins with queen sacrifices
 
 4. Advanced SQL with Chess Events:
-   SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
+   SELECT * FROM games WHERE (player won) AND (queen sacrificed)
    SELECT * FROM games WHERE (pawn exchanged before move 10)
    SELECT * FROM games WHERE (knight captured) AND (bishop captured)
 
@@ -316,9 +321,9 @@ Query Types & Examples:
    SELECT * FROM games WHERE white_elo > 1800 ORDER BY date_played DESC
 
 6. Player Results:
-   SELECT * FROM games WHERE (lecorvus won)
-   SELECT * FROM games WHERE (lecorvus lost) AND (queen sacrificed)
-   SELECT * FROM games WHERE (lecorvus drew)
+   SELECT * FROM games WHERE (player won)
+   SELECT * FROM games WHERE (player lost) AND (queen sacrificed)
+   SELECT * FROM games WHERE (player drew)
 
 Type 'examples' for more SQL examples or 'nl-examples' for natural language examples.
 """)
@@ -354,9 +359,9 @@ def ask(ctx, query, output_format, limit, api_key):
     """Ask a natural language question about chess games.
     
     Examples:
-    - "Show me games where lecorvus won"
+    - "Show me games where player won"
     - "Find games where queen was sacrificed"
-    - "Show me lecorvus wins with queen sacrifices"
+    - "Show me player wins with queen sacrifices"
     """
     db_path = ctx.obj['db_path']
     
@@ -365,7 +370,8 @@ def ask(ctx, query, output_format, limit, api_key):
         return
     
     try:
-        nl_search = NaturalLanguageSearch(db_path, api_key)
+        reference_player = ctx.obj['reference_player']
+        nl_search = NaturalLanguageSearch(db_path, api_key, reference_player)
         results = nl_search.search(query)
         
         if not results:

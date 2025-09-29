@@ -18,9 +18,9 @@ load_dotenv()
 class NaturalLanguageSearch:
     """Handles natural language to ChessQL query conversion."""
     
-    def __init__(self, db_path: str = "chess_games.db", api_key: Optional[str] = None):
+    def __init__(self, db_path: str = "chess_games.db", api_key: Optional[str] = None, reference_player: str = "lecorvus"):
         """Initialize the natural language search system."""
-        self.query_lang = ChessQueryLanguage(db_path)
+        self.query_lang = ChessQueryLanguage(db_path, reference_player)
         
         # Get API key from parameter or environment
         api_key = api_key or os.getenv('OPENAI_API_KEY')
@@ -30,7 +30,7 @@ class NaturalLanguageSearch:
         self.client = OpenAI(api_key=api_key)
         
         # System prompt for the AI
-        self.system_prompt = """You are a ChessQL query generator. Convert natural language questions about chess games into SQL queries.
+        self.system_prompt = f"""You are a ChessQL query generator. Convert natural language questions about chess games into SQL queries.
 
 CRITICAL RULES:
 1. ALWAYS query the 'games' table, NEVER the 'captures' table directly
@@ -41,6 +41,7 @@ CRITICAL RULES:
 6. Combine conditions with AND/OR as needed
 7. NEVER use JOIN with captures table - use ChessQL patterns like (queen sacrificed) instead
 8. For player-specific sacrifices: combine (player won/lost) AND (piece sacrificed) patterns
+9. Reference player is '{reference_player}' - use this for opponent queries
 
 Available tables and fields:
 - games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
@@ -54,20 +55,23 @@ Special query patterns:
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
 
 EXAMPLES:
-- "Show me games where lecorvus won" → SELECT * FROM games WHERE (lecorvus won)
+- "Show me games where {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won)
 - "Find games where queen was sacrificed" → SELECT * FROM games WHERE (queen sacrificed)
-- "How many games did lecorvus sacrifice his queen" → SELECT COUNT(*) FROM games WHERE (queen sacrificed)
+- "How many games did {reference_player} sacrifice his queen" → SELECT COUNT(*) FROM games WHERE ({reference_player} queen sacrificed)
 - "Count games where queen was sacrificed" → SELECT COUNT(*) FROM games WHERE (queen sacrificed)
-- "How many games did lecorvus sacrifice his queen and win" → SELECT COUNT(*) FROM games WHERE (lecorvus won) AND (queen sacrificed)
-- "How many games did lecorvus sacrifice his queen and lose" → SELECT COUNT(*) FROM games WHERE (lecorvus lost) AND (queen sacrificed)
-- "Show lecorvus wins with queen sacrifices" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
+- "How many games did {reference_player} sacrifice his queen and win" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND ({reference_player} queen sacrificed)
+- "How many games did {reference_player} sacrifice his queen and lose" → SELECT COUNT(*) FROM games WHERE ({reference_player} lost) AND ({reference_player} queen sacrificed)
+- "Show games where {reference_player} sacrificed his queen and won" → SELECT * FROM games WHERE ({reference_player} won) AND ({reference_player} queen sacrificed)
+- "Find games where opponent sacrificed their queen" → SELECT * FROM games WHERE (opponent queen sacrificed)
+- "Show games where opponent sacrificed queen and {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won) AND (opponent queen sacrificed)
+- "Show {reference_player} wins with queen sacrifices" → SELECT * FROM games WHERE ({reference_player} won) AND (queen sacrificed)
 - "Find pawn exchanges before move 10" → SELECT * FROM games WHERE (pawn exchanged before move 10)
 - "Show games sorted by ELO rating" → SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC
 - "Find games where knight was exchanged" → SELECT * FROM games WHERE (knight exchanged)
-- "Show me lecorvus losses" → SELECT * FROM games WHERE (lecorvus lost)
+- "Show me {reference_player} losses" → SELECT * FROM games WHERE ({reference_player} lost)
 - "Count games with bishop sacrifices" → SELECT COUNT(*) FROM games WHERE (bishop sacrificed)
-- "How many games did lecorvus sacrifice his knight" → SELECT COUNT(*) FROM games WHERE (lecorvus won) AND (knight sacrificed)
-- "Show games where lecorvus won and sacrificed queen" → SELECT * FROM games WHERE (lecorvus won) AND (queen sacrificed)
+- "How many games did {reference_player} sacrifice his knight" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND (knight sacrificed)
+- "Show games where {reference_player} won and sacrificed queen" → SELECT * FROM games WHERE ({reference_player} won) AND (queen sacrificed)
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
@@ -120,19 +124,19 @@ Always return ONLY the SQL query, no explanations or additional text."""
     def get_example_queries(self) -> List[str]:
         """Get example natural language queries."""
         return [
-            "Show me all games where lecorvus won",
+            f"Show me all games where {self.reference_player} won",
             "Find games where the queen was sacrificed",
-            "Show me lecorvus wins with queen sacrifices",
+            f"Show me {self.reference_player} wins with queen sacrifices",
             "Find games where pawns were exchanged before move 10",
             "Show games sorted by ELO rating",
-            "Find games where lecorvus lost and knight was sacrificed",
+            f"Find games where {self.reference_player} lost and knight was sacrificed",
             "Show me the most recent games",
             "Find games with the highest ELO ratings",
             "Show me games where bishops were captured by knights",
-            "Find games where lecorvus drew",
+            f"Find games where {self.reference_player} drew",
             "Show me games with queen exchanges after move 20",
             "Find games where rooks were sacrificed",
             "Show me games sorted by date",
-            "Find games where lecorvus won and pawn was exchanged",
+            f"Find games where {self.reference_player} won and pawn was exchanged",
             "Show me games with the most captures"
         ]

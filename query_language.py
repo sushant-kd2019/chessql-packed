@@ -11,9 +11,10 @@ import re
 class ChessQueryLanguage:
     """Simplified query language processor for chess game searches."""
     
-    def __init__(self, db_path: str = "chess_games.db"):
+    def __init__(self, db_path: str = "chess_games.db", reference_player: str = "lecorvus"):
         """Initialize the query language with database connection."""
         self.db = ChessDatabase(db_path)
+        self.reference_player = reference_player
     
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
         """Execute a query and return results."""
@@ -76,6 +77,8 @@ class ChessQueryLanguage:
             r'\([^)]*\b(captured|took)\s+(pawn|bishop|knight|rook|queen|king)\s+with\s+(pawn|bishop|knight|rook|queen|king)',
             r'\([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
             r'\([^)]*\b(exchanged|sacrificed)\s+(pawn|bishop|knight|rook|queen|king)',
+            r'\([^)]*\b(\w+)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
+            r'\([^)]*\b(opponent)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)',
         ]
         
         for pattern in capture_patterns:
@@ -88,7 +91,108 @@ class ChessQueryLanguage:
         """Handle SQL queries that contain capture conditions."""
         import re
         
-        # Check for exchange/sacrifice patterns first
+        # Check for opponent-specific exchange/sacrifice patterns first
+        opponent_exchange_match = re.search(
+            r'\(([^)]*\b(opponent)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)[^)]*)\)',
+            query, re.IGNORECASE
+        )
+        
+        if opponent_exchange_match:
+            condition = opponent_exchange_match.group(1)
+            piece = self._extract_piece_from_query(condition)
+            event_type = self._extract_exchange_type_from_query(condition)
+            move_condition = self._extract_move_condition_from_query(condition)
+            
+            if not piece or not event_type:
+                return []
+            
+            # Build the SQL query for opponent-specific exchanges/sacrifices
+            move_clause = ""
+            if move_condition:
+                if move_condition['type'] == 'before':
+                    move_clause = f"AND c.move_number <= {move_condition['move']}"
+                elif move_condition['type'] == 'after':
+                    move_clause = f"AND c.move_number >= {move_condition['move']}"
+            
+            if event_type == 'exchanged':
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.captured_piece = '{piece.upper()}' 
+                        AND c.is_exchange = 1
+                        AND ((games.white_player = '{self.reference_player}' AND c.side = 'white') OR (games.black_player = '{self.reference_player}' AND c.side = 'black'))
+                        {move_clause}
+                    )
+                """
+            else:  # sacrificed
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.captured_piece = '{piece.upper()}' 
+                        AND c.is_sacrifice = 1
+                        AND ((games.white_player = '{self.reference_player}' AND c.side = 'white') OR (games.black_player = '{self.reference_player}' AND c.side = 'black'))
+                        {move_clause}
+                    )
+                """
+            
+            # Replace the condition with the subquery
+            modified_query = query.replace(opponent_exchange_match.group(0), subquery)
+            return self.db.execute_sql_query(modified_query)
+        
+        # Check for player-specific exchange/sacrifice patterns
+        player_exchange_match = re.search(
+            r'\(([^)]*\b(\w+)\s+(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)[^)]*)\)',
+            query, re.IGNORECASE
+        )
+        
+        if player_exchange_match:
+            condition = player_exchange_match.group(1)
+            player_name = self._extract_player_name_from_query(condition)
+            piece = self._extract_piece_from_query(condition)
+            event_type = self._extract_exchange_type_from_query(condition)
+            move_condition = self._extract_move_condition_from_query(condition)
+            
+            if not player_name or not piece or not event_type:
+                return []
+            
+            # Build the SQL query for player-specific exchanges/sacrifices
+            move_clause = ""
+            if move_condition:
+                if move_condition['type'] == 'before':
+                    move_clause = f"AND c.move_number <= {move_condition['move']}"
+                elif move_condition['type'] == 'after':
+                    move_clause = f"AND c.move_number >= {move_condition['move']}"
+            
+            if event_type == 'exchanged':
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.captured_piece = '{piece.upper()}' 
+                        AND c.is_exchange = 1
+                        AND ((games.white_player = '{player_name}' AND c.side = 'black') OR (games.black_player = '{player_name}' AND c.side = 'white'))
+                        {move_clause}
+                    )
+                """
+            else:  # sacrificed
+                subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM captures c 
+                        WHERE c.game_id = games.id 
+                        AND c.captured_piece = '{piece.upper()}' 
+                        AND c.is_sacrifice = 1
+                        AND ((games.white_player = '{player_name}' AND c.side = 'black') OR (games.black_player = '{player_name}' AND c.side = 'white'))
+                        {move_clause}
+                    )
+                """
+            
+            # Replace the condition with the subquery
+            modified_query = query.replace(player_exchange_match.group(0), subquery)
+            return self.db.execute_sql_query(modified_query)
+        
+        # Check for general exchange/sacrifice patterns
         exchange_match = re.search(
             r'\(([^)]*\b(pawn|bishop|knight|rook|queen|king)\s+(exchanged|sacrificed)[^)]*)\)',
             query, re.IGNORECASE
@@ -401,22 +505,22 @@ class ChessQueryLanguage:
             'SELECT * FROM games WHERE (rook sacrificed after move 15)',
             
             # Player result queries
-            'SELECT white_player, black_player FROM games WHERE (lecorvus won)',
-            'SELECT COUNT(*) FROM games WHERE (lecorvus lost)',
-            'SELECT * FROM games WHERE (lecorvus drew)',
-            'SELECT white_player FROM games WHERE (lecorvus won) AND (queen sacrificed)',
+            'SELECT white_player, black_player FROM games WHERE (player won)',
+            'SELECT COUNT(*) FROM games WHERE (player lost)',
+            'SELECT * FROM games WHERE (player drew)',
+            'SELECT white_player FROM games WHERE (player won) AND (queen sacrificed)',
             
             # Sorting queries
             'SELECT white_player, black_player, result FROM games ORDER BY white_player',
             'SELECT white_player, black_player, white_elo FROM games ORDER BY CAST(white_elo AS INTEGER) DESC',
             'SELECT white_player, black_player, date_played FROM games ORDER BY date_played DESC',
             'SELECT white_player, COUNT(*) as games FROM games GROUP BY white_player ORDER BY games DESC',
-            'SELECT white_player, black_player FROM games WHERE (lecorvus won) ORDER BY date_played DESC',
+            'SELECT white_player, black_player FROM games WHERE (player won) ORDER BY date_played DESC',
             
             # Capture queries with move numbers
             'SELECT white_player FROM games WHERE (queen captured bishop before move 20)',
             'SELECT black_player FROM games WHERE (knight captured pawn after move 10)',
             'SELECT COUNT(*) FROM games WHERE (bishop captured bishop before move 15)',
             'SELECT * FROM games WHERE (pawn captured queen after move 5)',
-            'SELECT COUNT(*) FROM games WHERE ("lecorvus" won) AND (queen sacrificed)'
+            'SELECT COUNT(*) FROM games WHERE ("player" won) AND (queen sacrificed)'
         ]
