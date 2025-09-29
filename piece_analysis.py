@@ -282,6 +282,15 @@ class ChessPieceAnalyzer:
         if not move or move in ['O-O', 'O-O-O']:
             return 'K'  # Castling involves king
         
+        # Check for pawn promotion (e.g., "bxa8=Q", "e8=Q", "dxe1=Q+")
+        if '=' in move:
+            # Extract the promoted piece (e.g., "Q" from "bxa8=Q")
+            promoted_piece = move.split('=')[-1]
+            # Remove check/checkmate symbols (+ and #)
+            promoted_piece = promoted_piece.replace('+', '').replace('#', '')
+            if promoted_piece in self.PIECES:
+                return promoted_piece
+        
         # Check for piece symbols at the start of the move
         if move[0] in self.PIECES:
             return move[0]
