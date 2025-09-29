@@ -13,10 +13,11 @@ from piece_analysis import ChessPieceAnalyzer
 class PGNIngestion:
     """Handles PGN file parsing and database ingestion."""
     
-    def __init__(self, db_path: str = "chess_games.db"):
+    def __init__(self, db_path: str = "chess_games.db", reference_player: str = "lecorvus"):
         """Initialize the ingestion system with database connection."""
         self.db = ChessDatabase(db_path)
-        self.piece_analyzer = ChessPieceAnalyzer()
+        self.piece_analyzer = ChessPieceAnalyzer(reference_player=reference_player)
+        self.reference_player = reference_player
     
     def parse_pgn_file(self, file_path: str) -> List[Dict[str, Any]]:
         """Parse a PGN file and extract game data."""
@@ -110,6 +111,7 @@ class PGNIngestion:
     def ingest_file(self, file_path: str) -> int:
         """Ingest a PGN file into the database."""
         print(f"Parsing PGN file: {file_path}")
+        print(f"Using reference player: {self.reference_player}")
         games = self.parse_pgn_file(file_path)
         
         if not games:
@@ -126,7 +128,7 @@ class PGNIngestion:
                 game_id = self.db.insert_game(game)
                 
                 # Analyze captures with position tracking
-                captures = self.piece_analyzer.analyze_captures(game.get('moves', ''), game.get('white_player'), game.get('black_player'))
+                captures = self.piece_analyzer.analyze_captures(game.get('moves', ''), game.get('white_player'), game.get('black_player'), self.reference_player)
                 
                 if captures:
                     self.db.insert_captures(game_id, captures)
@@ -170,10 +172,11 @@ def main():
     parser.add_argument('input', help='PGN file or directory to ingest')
     parser.add_argument('--db', default='chess_games.db', help='Database file path')
     parser.add_argument('--pattern', default='*.pgn', help='File pattern for directory ingestion')
+    parser.add_argument('--reference-player', default='lecorvus', help='Reference player for sacrifice analysis')
     
     args = parser.parse_args()
     
-    ingestion = PGNIngestion(args.db)
+    ingestion = PGNIngestion(args.db, args.reference_player)
     
     if os.path.isfile(args.input):
         ingestion.ingest_file(args.input)
