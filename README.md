@@ -10,6 +10,7 @@ A Python-based system for storing, ingesting, and querying chess games in PGN fo
 - **Chess-Specific Queries**: Find sacrifices, exchanges, pawn promotions, and other chess events
 - **Multiple Promotion Support**: Query for games with multiple promotions using `x N` format
 - **CLI Interface**: Command-line tool for database operations
+- **REST API**: FastAPI server with `/cql` and `/query` endpoints
 - **Interactive Mode**: Interactive search and exploration
 
 ## Installation
@@ -85,6 +86,96 @@ python cli.py stats
 View detailed information about a specific game:
 ```bash
 python cli.py show 1
+```
+
+### 6. REST API Server
+
+Start the FastAPI server:
+```bash
+python start_server.py
+```
+
+Or manually:
+```bash
+python server.py
+```
+
+The server provides two main endpoints:
+- **`/cql`**: Execute ChessQL queries (SQL + chess patterns)
+- **`/query`**: Execute natural language queries
+
+API Documentation: http://localhost:9090/docs
+
+### API Endpoints
+
+#### POST `/cql`
+Execute ChessQL queries (SQL + chess patterns).
+
+**Request Body:**
+```json
+{
+  "query": "SELECT COUNT(*) FROM games WHERE (lecorvus won)",
+  "limit": 100
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "results": [{"COUNT(*)": 825}],
+  "count": 1,
+  "query": "SELECT COUNT(*) FROM games WHERE (lecorvus won)",
+  "error": null
+}
+```
+
+#### POST `/query`
+Execute natural language queries.
+
+**Request Body:**
+```json
+{
+  "question": "Show me games where lecorvus won",
+  "limit": 10
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "results": [...],
+  "count": 10,
+  "query": "Show me games where lecorvus won",
+  "error": null
+}
+```
+
+#### GET `/health`
+Health check endpoint.
+
+#### GET `/examples`
+Get example queries for both endpoints.
+
+### API Usage Examples
+
+```bash
+# ChessQL query
+curl -X POST "http://localhost:9090/cql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT COUNT(*) FROM games WHERE (queen sacrificed)", "limit": 5}'
+
+# Natural language query
+curl -X POST "http://localhost:9090/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Find games where lecorvus promoted to queen x 2", "limit": 3}'
+
+# Health check
+curl -X GET "http://localhost:9090/health"
+
+# Get examples
+curl -X GET "http://localhost:9090/examples"
 ```
 
 ## Query Language
@@ -333,6 +424,8 @@ chessql/
 ├── natural_language_search.py # AI-powered natural language queries
 ├── piece_analysis.py        # Chess piece analysis and sacrifice detection
 ├── cli.py                   # Command-line interface
+├── server.py                # FastAPI REST API server
+├── start_server.py          # Server startup script
 ├── requirements.txt         # Python dependencies
 └── README.md               # This file
 ```
@@ -345,6 +438,7 @@ chessql/
 4. **Natural Language** (`natural_language_search.py`): AI-powered query generation
 5. **Chess Analysis** (`piece_analysis.py`): Sacrifice and exchange detection
 6. **CLI Interface** (`cli.py`): Command-line user interface
+7. **REST API** (`server.py`): FastAPI server with `/cql` and `/query` endpoints
 
 ### Adding New Features
 
