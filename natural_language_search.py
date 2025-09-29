@@ -42,6 +42,7 @@ CRITICAL RULES:
 7. NEVER use JOIN with captures table - use ChessQL patterns like (queen sacrificed) instead
 8. For player-specific sacrifices: combine (player won/lost) AND (piece sacrificed) patterns
 9. Reference player is '{reference_player}' - use this for opponent queries
+10. For ELO ratings: Use white_elo or black_elo columns, NOT player_elo. Check both white_player and black_player to determine which ELO column to use
 
 Available tables and fields:
 - games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
@@ -72,6 +73,8 @@ EXAMPLES:
 - "Count games with bishop sacrifices" → SELECT COUNT(*) FROM games WHERE (bishop sacrificed)
 - "How many games did {reference_player} sacrifice his knight" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND (knight sacrificed)
 - "Show games where {reference_player} won and sacrificed queen" → SELECT * FROM games WHERE ({reference_player} won) AND (queen sacrificed)
+- "Games where {reference_player} was rated over 1500" → SELECT * FROM games WHERE ((white_player = '{reference_player}' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = '{reference_player}' AND CAST(black_elo AS INTEGER) > 1500))
+- "Count games where {reference_player} sacrificed queen and lost when rated over 1500" → SELECT COUNT(*) FROM games WHERE ({reference_player} lost) AND ({reference_player} queen sacrificed) AND ((white_player = '{reference_player}' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = '{reference_player}' AND CAST(black_elo AS INTEGER) > 1500))
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
