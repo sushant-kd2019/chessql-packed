@@ -207,7 +207,7 @@ async def execute_natural_language_query(request: NaturalLanguageRequest):
             raise HTTPException(status_code=500, detail="Natural language search not initialized")
         
         # Execute the natural language query
-        results = natural_search.search(request.question, show_query=False)
+        results = natural_search.search(request.question, show_query=True)
         total_count = len(results)
         
         # Calculate pagination
