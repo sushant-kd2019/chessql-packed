@@ -4,8 +4,8 @@
 
 ## Todos
 
-- [ ] Implement Lichess OAuth2 PKCE authentication flow
-- [ ] Add accounts table and management to database.py
+- [x] Implement Lichess OAuth2 PKCE authentication flow
+- [x] Add accounts table and management to database.py
 - [ ] Create Lichess game streaming/sync service
 - [ ] Add sync API endpoints to server.py
 - [ ] Build account management UI components
@@ -94,10 +94,14 @@ CREATE TABLE accounts (
 );
 ```
 
-### Lichess App Registration
+### Lichess OAuth Setup
 
-- Register app at https://lichess.org/account/oauth/app
-- Callback URL: `chessql://oauth/callback` (custom protocol) or `http://localhost:PORT/callback`
+Lichess has a simplified OAuth model - **no app registration required!**
+
+- Use any `client_id` (e.g., `chessql-desktop`)
+- Callback URL: `http://localhost:9090/auth/lichess/callback`
+- PKCE flow works out of the box
+- Users can also manually create tokens at: https://lichess.org/account/oauth/token
 
 ---
 

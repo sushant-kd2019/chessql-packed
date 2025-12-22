@@ -22,10 +22,28 @@ class ChessDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            # Create accounts table for Lichess authentication
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    access_token TEXT NOT NULL,
+                    token_expires_at INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_sync_at TIMESTAMP,
+                    last_game_at INTEGER,
+                    games_count INTEGER DEFAULT 0
+                )
+            """)
+            
+            # Create index for accounts
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username)")
+            
             # Create games table with tags as columns and moves in one column
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS games (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER,
                     pgn_text TEXT NOT NULL,
                     moves TEXT NOT NULL,
                     white_player TEXT,
@@ -44,7 +62,8 @@ class ChessDatabase:
                     termination TEXT,
                     white_result TEXT,
                     black_result TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (account_id) REFERENCES accounts (id)
                 )
             """)
             
