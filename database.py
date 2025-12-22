@@ -44,6 +44,7 @@ class ChessDatabase:
                 CREATE TABLE IF NOT EXISTS games (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     account_id INTEGER,
+                    lichess_id TEXT,
                     pgn_text TEXT NOT NULL,
                     moves TEXT NOT NULL,
                     white_player TEXT,
@@ -66,6 +67,15 @@ class ChessDatabase:
                     FOREIGN KEY (account_id) REFERENCES accounts (id)
                 )
             """)
+            
+            # Migration: Add lichess_id column if it doesn't exist (for existing databases)
+            cursor.execute("PRAGMA table_info(games)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'lichess_id' not in columns:
+                cursor.execute("ALTER TABLE games ADD COLUMN lichess_id TEXT")
+            
+            # Create index for lichess_id for fast duplicate checking
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lichess_id ON games(lichess_id)")
             
             # Create captures table for detailed capture information
             cursor.execute("""
@@ -98,7 +108,7 @@ class ChessDatabase:
             
             conn.commit()
     
-    def insert_game(self, pgn_data: Dict[str, Any]) -> int:
+    def insert_game(self, pgn_data: Dict[str, Any], account_id: Optional[int] = None) -> int:
         """Insert a single game into the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -110,11 +120,13 @@ class ChessDatabase:
             
             cursor.execute("""
                 INSERT INTO games (
-                    pgn_text, moves, white_player, black_player, result, date_played,
-                    event, site, round, eco_code, opening, time_control,
+                    account_id, lichess_id, pgn_text, moves, white_player, black_player, 
+                    result, date_played, event, site, round, eco_code, opening, time_control,
                     white_elo, black_elo, variant, termination, white_result, black_result
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
+                account_id,
+                pgn_data.get('lichess_id'),
                 pgn_data.get('pgn_text', ''),
                 pgn_data.get('moves', ''),
                 pgn_data.get('white_player', ''),
@@ -138,6 +150,38 @@ class ChessDatabase:
             game_id = cursor.lastrowid
             conn.commit()
             return game_id
+    
+    def game_exists(self, lichess_id: str) -> bool:
+        """Check if a game with the given Lichess ID already exists."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM games WHERE lichess_id = ?", (lichess_id,))
+            return cursor.fetchone() is not None
+    
+    def get_latest_game_timestamp(self, account_id: int) -> Optional[int]:
+        """Get the timestamp of the latest game for an account (for incremental sync)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT MAX(CAST(
+                    CASE 
+                        WHEN site LIKE 'https://lichess.org/%' 
+                        THEN substr(site, 22) 
+                        ELSE NULL 
+                    END AS TEXT
+                )) as latest_id
+                FROM games 
+                WHERE account_id = ?
+            """, (account_id,))
+            # This is a simplified approach - we'll use last_game_at from accounts table instead
+            return None
+    
+    def get_games_count_by_account(self, account_id: int) -> int:
+        """Get the count of games for a specific account."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM games WHERE account_id = ?", (account_id,))
+            return cursor.fetchone()[0]
     
     def _calculate_player_result(self, result: str, player_color: str) -> str:
         """Calculate the result for a specific player (win/loss/draw)."""

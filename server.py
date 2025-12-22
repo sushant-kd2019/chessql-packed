@@ -14,6 +14,8 @@ from query_language import ChessQueryLanguage
 from natural_language_search import NaturalLanguageSearch
 from accounts import AccountManager
 from lichess_auth import LichessAuth, LichessAuthError, verify_token, revoke_token, add_token_manually
+from lichess_sync import get_sync_manager, LichessGame, SyncStatus, LichessSyncError
+from database import ChessDatabase
 
 app = FastAPI(
     title="ChessQL API",
@@ -35,11 +37,15 @@ query_lang = None
 natural_search = None
 account_manager = None
 lichess_auth = None
+chess_db = None
+
+# Background sync tasks
+_sync_tasks: Dict[str, Any] = {}
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize the query processors on startup."""
-    global query_lang, natural_search, account_manager, lichess_auth
+    global query_lang, natural_search, account_manager, lichess_auth, chess_db
     
     db_path = os.getenv("CHESSQL_DB_PATH", "chess_games.db")
     reference_player = os.getenv("CHESSQL_REFERENCE_PLAYER", "lecorvus")
@@ -47,6 +53,9 @@ async def startup_event():
     # Lichess OAuth2 configuration
     lichess_client_id = os.getenv("LICHESS_CLIENT_ID", "chessql-desktop")
     lichess_redirect_uri = os.getenv("LICHESS_REDIRECT_URI", "http://localhost:9090/auth/lichess/callback")
+    
+    # Initialize database
+    chess_db = ChessDatabase(db_path)
     
     # Initialize account manager (creates tables if needed)
     account_manager = AccountManager(db_path)
@@ -452,6 +461,238 @@ async def verify_account(username: str):
         }
     else:
         return {"valid": False, "message": "Token is invalid or expired"}
+
+
+# ============================================================================
+# Game Sync Endpoints
+# ============================================================================
+
+class SyncStartRequest(BaseModel):
+    """Request for starting a sync operation."""
+    max_games: Optional[int] = None  # Limit for testing
+
+
+class SyncProgressResponse(BaseModel):
+    """Response for sync progress."""
+    status: str
+    total_games: Optional[int] = None
+    synced_games: int = 0
+    new_games: int = 0
+    skipped_games: int = 0
+    error_message: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+async def _run_sync_task(username: str, access_token: str, account_id: int, since: Optional[int], max_games: Optional[int]):
+    """Background task to sync games."""
+    import asyncio
+    from datetime import datetime
+    from piece_analysis import ChessPieceAnalyzer
+    
+    sync_manager = get_sync_manager()
+    progress = sync_manager.get_progress(username.lower())
+    
+    # Initialize piece analyzer for capture analysis
+    piece_analyzer = ChessPieceAnalyzer(reference_player=username)
+    
+    new_games_count = 0
+    skipped_count = 0
+    latest_game_ts = since
+    
+    try:
+        async for game in sync_manager.stream_games(
+            username=username,
+            access_token=access_token,
+            since=since,
+            max_games=max_games,
+            with_opening=True,
+        ):
+            # Check for cancellation
+            if sync_manager._cancel_flags.get(username.lower(), False):
+                progress.status = SyncStatus.CANCELLED
+                break
+            
+            # Convert to database format
+            game_data = game.to_pgn_dict()
+            
+            # Check if game already exists
+            if chess_db.game_exists(game.id):
+                skipped_count += 1
+                progress.skipped_games = skipped_count
+            else:
+                # Insert game
+                try:
+                    game_id = chess_db.insert_game(game_data, account_id=account_id)
+                    
+                    # Analyze captures
+                    if game.moves:
+                        captures = piece_analyzer.analyze_captures(
+                            game.moves,
+                            game.white_player,
+                            game.black_player,
+                            username
+                        )
+                        if captures:
+                            chess_db.insert_captures(game_id, captures)
+                    
+                    new_games_count += 1
+                    progress.new_games = new_games_count
+                except Exception as e:
+                    # Skip games that fail to insert (e.g., duplicates)
+                    skipped_count += 1
+                    progress.skipped_games = skipped_count
+            
+            progress.synced_games += 1
+            
+            # Track latest game timestamp for incremental sync
+            if game.created_at and (latest_game_ts is None or game.created_at > latest_game_ts):
+                latest_game_ts = game.created_at
+        
+        if progress.status != SyncStatus.CANCELLED:
+            progress.status = SyncStatus.COMPLETED
+        
+        # Update account sync status
+        if account_manager and latest_game_ts:
+            account_manager.update_sync_status(
+                username=username,
+                last_sync_at=datetime.now(),
+                last_game_at=latest_game_ts,
+                games_count=chess_db.get_games_count_by_account(account_id)
+            )
+        
+    except LichessSyncError as e:
+        progress.status = SyncStatus.ERROR
+        progress.error_message = str(e)
+    except Exception as e:
+        progress.status = SyncStatus.ERROR
+        progress.error_message = f"Unexpected error: {str(e)}"
+    
+    progress.completed_at = datetime.now()
+    
+    # Clean up task reference
+    if username.lower() in _sync_tasks:
+        del _sync_tasks[username.lower()]
+
+
+@app.post("/sync/start/{username}", response_model=SyncProgressResponse)
+async def start_sync(username: str, request: SyncStartRequest = None):
+    """
+    Start syncing games for an account from Lichess.
+    
+    This initiates a background sync that downloads all games for the account.
+    Use GET /sync/status/{username} to check progress.
+    
+    For incremental sync, the system automatically uses the last sync timestamp.
+    """
+    import asyncio
+    
+    if account_manager is None or chess_db is None:
+        raise HTTPException(status_code=500, detail="Server not initialized")
+    
+    # Get account
+    account = account_manager.get_account(username)
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
+    
+    # Check if sync already in progress
+    sync_manager = get_sync_manager()
+    if sync_manager.is_syncing(username.lower()):
+        raise HTTPException(status_code=409, detail="Sync already in progress")
+    
+    # Get last sync timestamp for incremental sync
+    since = account.get('last_game_at')
+    if since:
+        since = since + 1  # Start from the next millisecond
+    
+    # Initialize progress
+    from datetime import datetime
+    progress = sync_manager._sync_progress[username.lower()] = sync_manager.get_progress(username.lower())
+    progress.status = SyncStatus.SYNCING
+    progress.started_at = datetime.now()
+    progress.synced_games = 0
+    progress.new_games = 0
+    progress.skipped_games = 0
+    progress.error_message = None
+    progress.completed_at = None
+    sync_manager._cancel_flags[username.lower()] = False
+    
+    # Start background task
+    max_games = request.max_games if request else None
+    task = asyncio.create_task(_run_sync_task(
+        username=username,
+        access_token=account['access_token'],
+        account_id=account['id'],
+        since=since,
+        max_games=max_games
+    ))
+    _sync_tasks[username.lower()] = task
+    
+    return SyncProgressResponse(
+        status=progress.status.value,
+        synced_games=0,
+        new_games=0,
+        skipped_games=0,
+        started_at=progress.started_at.isoformat() if progress.started_at else None
+    )
+
+
+@app.get("/sync/status/{username}", response_model=SyncProgressResponse)
+async def get_sync_status(username: str):
+    """
+    Get the current sync progress for an account.
+    """
+    sync_manager = get_sync_manager()
+    progress = sync_manager.get_progress(username.lower())
+    
+    return SyncProgressResponse(
+        status=progress.status.value,
+        total_games=progress.total_games,
+        synced_games=progress.synced_games,
+        new_games=progress.new_games,
+        skipped_games=progress.skipped_games,
+        error_message=progress.error_message,
+        started_at=progress.started_at.isoformat() if progress.started_at else None,
+        completed_at=progress.completed_at.isoformat() if progress.completed_at else None
+    )
+
+
+@app.post("/sync/stop/{username}")
+async def stop_sync(username: str):
+    """
+    Cancel an ongoing sync operation.
+    """
+    sync_manager = get_sync_manager()
+    
+    if not sync_manager.is_syncing(username.lower()):
+        raise HTTPException(status_code=404, detail="No sync in progress")
+    
+    sync_manager.cancel_sync(username.lower())
+    
+    return {"success": True, "message": f"Sync cancellation requested for '{username}'"}
+
+
+@app.get("/sync/games/{username}")
+async def get_synced_games_count(username: str):
+    """
+    Get the count of synced games for an account.
+    """
+    if account_manager is None or chess_db is None:
+        raise HTTPException(status_code=500, detail="Server not initialized")
+    
+    account = account_manager.get_account(username)
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
+    
+    count = chess_db.get_games_count_by_account(account['id'])
+    
+    return {
+        "username": username,
+        "games_count": count,
+        "last_sync_at": account.get('last_sync_at'),
+        "last_game_at": account.get('last_game_at')
+    }
+
 
 @app.post("/cql", response_model=QueryResponse)
 async def execute_chessql_query(request: ChessQLRequest):

@@ -78,34 +78,61 @@ class ChessPieceAnalyzer:
         self.board = self._init_board()
     
     def parse_moves_with_captures(self, moves_text: str) -> List[Dict[str, Any]]:
-        """Parse moves and track captures with position information."""
+        """Parse moves and track captures with position information.
+        
+        Supports both formats:
+        - PGN format with move numbers: "1. e4 e5 2. Nf3 Nc6"
+        - Lichess format without move numbers: "e4 e5 Nf3 Nc6"
+        """
         moves = []
         self.reset_board()
         
         # Remove result markers
         moves_text = re.sub(r'\s+(1-0|0-1|1/2-1/2|\*)\s*$', '', moves_text)
         
-        # Split by move numbers
-        move_blocks = re.split(r'(\d+\.)', moves_text)
+        # Check if moves have move numbers (PGN format) or not (Lichess format)
+        has_move_numbers = bool(re.search(r'\d+\.', moves_text))
         
-        # Process each move block
-        for i in range(1, len(move_blocks), 2):
-            if i + 1 < len(move_blocks):
-                move_num = move_blocks[i].strip(' .')
-                move_text = move_blocks[i + 1].strip()
+        if has_move_numbers:
+            # PGN format with move numbers: "1. e4 e5 2. Nf3 Nc6"
+            move_blocks = re.split(r'(\d+\.)', moves_text)
+            
+            for i in range(1, len(move_blocks), 2):
+                if i + 1 < len(move_blocks):
+                    move_num = move_blocks[i].strip(' .')
+                    move_text = move_blocks[i + 1].strip()
+                    
+                    move_parts = move_text.split()
+                    white_move = move_parts[0] if len(move_parts) > 0 else ''
+                    black_move = move_parts[1] if len(move_parts) > 1 else ''
+                    
+                    white_capture, black_capture = self._parse_move_pair(
+                        white_move, black_move, 'white', 'black', int(move_num)
+                    )
+                    
+                    moves.append({
+                        'move_number': int(move_num),
+                        'white_move': white_move,
+                        'black_move': black_move,
+                        'white_capture': white_capture,
+                        'black_capture': black_capture,
+                    })
+        else:
+            # Lichess format without move numbers: "e4 e5 Nf3 Nc6"
+            all_moves = moves_text.split()
+            move_num = 0
+            
+            for i in range(0, len(all_moves), 2):
+                move_num += 1
+                white_move = all_moves[i] if i < len(all_moves) else ''
+                black_move = all_moves[i + 1] if i + 1 < len(all_moves) else ''
                 
-                # Split white and black moves
-                move_parts = move_text.split()
-                white_move = move_parts[0] if len(move_parts) > 0 else ''
-                black_move = move_parts[1] if len(move_parts) > 1 else ''
-                
-                # Parse both moves together to handle simultaneous captures correctly
                 white_capture, black_capture = self._parse_move_pair(
-                    white_move, black_move, 'white', 'black', int(move_num)
+                    white_move, black_move, 'white', 'black', move_num
                 )
                 
                 moves.append({
-                    'move_number': int(move_num),
+                    'move_number': move_num,
                     'white_move': white_move,
                     'black_move': black_move,
                     'white_capture': white_capture,
