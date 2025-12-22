@@ -6,8 +6,8 @@
 
 - [x] Implement Lichess OAuth2 PKCE authentication flow
 - [x] Add accounts table and management to database.py
-- [ ] Create Lichess game streaming/sync service
-- [ ] Add sync API endpoints to server.py
+- [x] Create Lichess game streaming/sync service
+- [x] Add sync API endpoints to server.py
 - [ ] Build account management UI components
 - [ ] Configure PyInstaller for Python backend bundling
 - [ ] Configure electron-builder for macOS packaging
