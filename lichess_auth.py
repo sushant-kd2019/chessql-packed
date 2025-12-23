@@ -93,7 +93,7 @@ class LichessAuth:
             state=state
         )
     
-    def start_authorization(self, scopes: Optional[list] = None) -> Tuple[str, str]:
+    def start_authorization(self, scopes: Optional[list] = None) -> Tuple[str, str, str]:
         """
         Start the OAuth2 authorization flow.
         
@@ -101,7 +101,9 @@ class LichessAuth:
             scopes: List of OAuth scopes to request (default: DEFAULT_SCOPES)
         
         Returns:
-            Tuple of (authorization_url, state)
+            Tuple of (authorization_url, state, code_verifier)
+            For desktop apps, the code_verifier is returned so it can be passed back
+            during the callback to complete the PKCE flow.
         """
         if scopes is None:
             scopes = DEFAULT_SCOPES
@@ -109,7 +111,7 @@ class LichessAuth:
         # Generate PKCE challenge
         pkce = self.generate_pkce_pair()
         
-        # Store for later verification
+        # Store for later verification (for web-based flows)
         self._pending_auth[pkce.state] = pkce
         
         # Build authorization URL
@@ -125,15 +127,21 @@ class LichessAuth:
         
         auth_url = f"{LICHESS_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
         
-        return auth_url, pkce.state
+        return auth_url, pkce.state, pkce.code_verifier
     
-    async def complete_authorization(self, code: str, state: str) -> AuthorizationResult:
+    async def complete_authorization(
+        self, 
+        code: str, 
+        state: str, 
+        code_verifier: Optional[str] = None
+    ) -> AuthorizationResult:
         """
         Complete the OAuth2 authorization flow by exchanging the code for a token.
         
         Args:
             code: Authorization code from Lichess callback
             state: State parameter from callback (for CSRF verification)
+            code_verifier: Optional code_verifier for desktop apps that manage PKCE client-side
         
         Returns:
             AuthorizationResult with access token and user info
@@ -141,11 +149,19 @@ class LichessAuth:
         Raises:
             LichessAuthError: If authorization fails
         """
-        # Verify state
-        if state not in self._pending_auth:
-            raise LichessAuthError("Invalid or expired state parameter")
-        
-        pkce = self._pending_auth.pop(state)
+        # For desktop apps, code_verifier is passed directly
+        # For web apps, it's stored in _pending_auth
+        if code_verifier:
+            # Desktop app flow - code_verifier provided by client
+            verifier = code_verifier
+            # Clean up pending auth if it exists
+            self._pending_auth.pop(state, None)
+        else:
+            # Web app flow - code_verifier stored server-side
+            if state not in self._pending_auth:
+                raise LichessAuthError("Invalid or expired state parameter")
+            pkce = self._pending_auth.pop(state)
+            verifier = pkce.code_verifier
         
         # Exchange code for token
         async with httpx.AsyncClient() as client:
@@ -157,7 +173,7 @@ class LichessAuth:
                         'code': code,
                         'redirect_uri': self.redirect_uri,
                         'client_id': self.client_id,
-                        'code_verifier': pkce.code_verifier
+                        'code_verifier': verifier
                     },
                     headers={
                         'Content-Type': 'application/x-www-form-urlencoded'

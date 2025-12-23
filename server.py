@@ -161,12 +161,14 @@ class AuthStartResponse(BaseModel):
     """Response for starting OAuth flow."""
     auth_url: str
     state: str
+    code_verifier: str  # Required for desktop apps to complete PKCE flow
 
 
 class AuthCallbackRequest(BaseModel):
     """Request for completing OAuth flow."""
     code: str
     state: str
+    code_verifier: Optional[str] = None  # Required for desktop apps that manage PKCE client-side
 
 
 class AuthCallbackResponse(BaseModel):
@@ -193,14 +195,15 @@ async def start_lichess_auth():
     Start the Lichess OAuth2 authorization flow.
     
     Returns an authorization URL that the user should open in their browser.
-    The 'state' parameter should be saved and verified in the callback.
+    The 'state' and 'code_verifier' parameters should be saved for the callback.
+    For desktop apps, the code_verifier is needed to complete the PKCE flow.
     """
     if lichess_auth is None:
         raise HTTPException(status_code=500, detail="Lichess auth not initialized")
     
-    auth_url, state = lichess_auth.start_authorization()
+    auth_url, state, code_verifier = lichess_auth.start_authorization()
     
-    return AuthStartResponse(auth_url=auth_url, state=state)
+    return AuthStartResponse(auth_url=auth_url, state=state, code_verifier=code_verifier)
 
 
 @app.post("/auth/lichess/callback", response_model=AuthCallbackResponse)
@@ -209,6 +212,7 @@ async def complete_lichess_auth(request: AuthCallbackRequest):
     Complete the Lichess OAuth2 authorization flow.
     
     Exchange the authorization code for an access token and save the account.
+    For desktop apps, pass the code_verifier that was returned from /auth/lichess/start.
     """
     if lichess_auth is None:
         raise HTTPException(status_code=500, detail="Lichess auth not initialized")
@@ -217,7 +221,11 @@ async def complete_lichess_auth(request: AuthCallbackRequest):
         raise HTTPException(status_code=500, detail="Account manager not initialized")
     
     try:
-        result = await lichess_auth.complete_authorization(request.code, request.state)
+        result = await lichess_auth.complete_authorization(
+            request.code, 
+            request.state, 
+            code_verifier=request.code_verifier
+        )
         
         # Calculate token expiration timestamp
         expires_at = None
