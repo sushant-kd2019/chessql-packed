@@ -8,7 +8,7 @@ Technical documentation for packaging ChessQL as a distributable desktop applica
 |-------|----------|--------|
 | 1 | [Lichess Authentication](./phase1-lichess-authentication.md) | ✅ Complete |
 | 2 | [Lichess Game Sync](./phase2-lichess-game-sync.md) | ✅ Complete |
-| 3 | Account Management UI | 🔜 Pending |
+| 3 | [Account Management UI](./phase3-account-management-ui.md) | ✅ Complete |
 | 4 | Application Packaging | 🔜 Pending |
 
 ## Key Implementation Notes
