@@ -13,6 +13,7 @@ class ChessQueryLanguage:
     
     def __init__(self, db_path: str = "chess_games.db", reference_player: str = "lecorvus"):
         """Initialize the query language with database connection."""
+        self.db_path = db_path  # Store for later reference
         self.db = ChessDatabase(db_path)
         self.reference_player = reference_player
     

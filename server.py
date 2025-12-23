@@ -104,6 +104,7 @@ class ChessQLRequest(BaseModel):
     limit: Optional[int] = 100
     page_no: Optional[int] = 1
     offset: Optional[int] = None
+    reference_player: Optional[str] = None  # The account to use for ChessQL patterns
 
 class NaturalLanguageRequest(BaseModel):
     """Request model for natural language queries."""
@@ -111,6 +112,7 @@ class NaturalLanguageRequest(BaseModel):
     limit: Optional[int] = 100
     page_no: Optional[int] = 1
     offset: Optional[int] = None
+    reference_player: Optional[str] = None  # The account to scope queries to (for "I", "my", etc.)
 
 class QueryResponse(BaseModel):
     """Response model for query results."""
@@ -716,13 +718,21 @@ async def execute_chessql_query(request: ChessQLRequest):
     - page_no: Page number (1-based, default: 1)
     - limit: Results per page (default: 100)
     - offset: Direct offset (overrides page_no if provided)
+    - reference_player: Optional account name for ChessQL patterns
     """
     try:
         if query_lang is None:
             raise HTTPException(status_code=500, detail="Query language not initialized")
         
-        # Execute the query
-        results = query_lang.execute_query(request.query)
+        # Use reference_player override if provided, otherwise use default query_lang
+        if request.reference_player:
+            from query_language import ChessQueryLanguage
+            db_path = os.getenv("CHESSQL_DB_PATH", "chess_games.db")
+            temp_query_lang = ChessQueryLanguage(db_path, request.reference_player)
+            results = temp_query_lang.execute_query(request.query)
+        else:
+            results = query_lang.execute_query(request.query)
+        
         total_count = len(results)
         
         # Calculate pagination
@@ -788,8 +798,12 @@ async def execute_natural_language_query(request: NaturalLanguageRequest):
         if natural_search is None:
             raise HTTPException(status_code=500, detail="Natural language search not initialized")
         
-        # Execute the natural language query
-        results = natural_search.search(request.question, show_query=True)
+        # Execute the natural language query with optional reference player override
+        results = natural_search.search(
+            request.question, 
+            show_query=True,
+            reference_player=request.reference_player
+        )
         total_count = len(results)
         
         # Calculate pagination

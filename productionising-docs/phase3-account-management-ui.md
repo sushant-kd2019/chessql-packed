@@ -11,6 +11,7 @@ We implemented a full account management interface that allows users to:
 - **Sync games** from Lichess (incremental or full)
 - **Monitor sync progress** in real-time
 - **Remove accounts** when no longer needed
+- **Select account for queries** - scope searches to a specific account (no cross-account searches)
 
 ## Architecture
 
@@ -30,13 +31,14 @@ We implemented a full account management interface that allows users to:
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │                    ChessQLApp                        │    │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │    │
-│  │  │ Accounts Btn │  │ Accounts     │  │ Sync      │  │    │
-│  │  │ (Header)     │  │ Panel        │  │ Toast     │  │    │
+│  │  │ Account      │  │ Accounts     │  │ Sync      │  │    │
+│  │  │ Selector     │  │ Panel        │  │ Toast     │  │    │
+│  │  │ (Search Bar) │  │ (Sidebar)    │  │           │  │    │
 │  │  └──────────────┘  └──────────────┘  └───────────┘  │    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
             │
-            ▼
+            ▼ (passes reference_player)
 ┌─────────────────────────────────────────────────────────────┐
 │                    FastAPI Backend                           │
 │  /auth/lichess/start    → OAuth URL + code_verifier         │
@@ -44,6 +46,8 @@ We implemented a full account management interface that allows users to:
 │  /auth/accounts         → List all accounts                 │
 │  /sync/start/{user}     → Start game sync                   │
 │  /sync/status/{user}    → Get sync progress                 │
+│  /ask                   → Natural language (+ reference_player)
+│  /cql                   → ChessQL query (+ reference_player)│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -457,6 +461,161 @@ updateSyncProgress(username, progress) {
 3. Monitor progress updates
 4. Verify toast auto-hides after completion
 5. Verify games count updates in the account card
+
+---
+
+## Account Selector for Queries
+
+To support multiple accounts without cross-account searches, we added an account selector that scopes all queries to a specific user.
+
+### UI Component
+
+Added a dropdown in the search area:
+
+```html
+<div class="account-selector">
+    <label for="accountSelect" class="account-selector-label">Playing as:</label>
+    <select id="accountSelect" class="account-select">
+        <option value="">All accounts</option>
+        <!-- Options populated dynamically -->
+    </select>
+</div>
+```
+
+### Styling
+
+```css
+.account-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.15);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.account-select {
+    padding: 6px 10px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.9);
+    min-width: 140px;
+}
+```
+
+### JavaScript Integration
+
+The account selector is populated when accounts are loaded and the selected account is passed to all search queries:
+
+```javascript
+updateAccountSelector() {
+    const currentValue = this.accountSelect.value;
+    this.accountSelect.innerHTML = '<option value="">All accounts</option>';
+    
+    this.accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.username;
+        option.textContent = account.username;
+        this.accountSelect.appendChild(option);
+    });
+    
+    // Auto-select if only one account
+    if (this.accounts.length === 1) {
+        this.accountSelect.value = this.accounts[0].username;
+    }
+}
+
+async searchGames(query, searchType, page = 1) {
+    const selectedAccount = this.getSelectedAccount();
+    
+    const data = searchType === 'natural' 
+        ? { 
+            question: query, 
+            reference_player: selectedAccount  // Pass selected account
+          }
+        : { 
+            query: query, 
+            reference_player: selectedAccount
+          };
+    // ... rest of search logic
+}
+```
+
+### Backend Changes
+
+#### Request Models Updated
+
+```python
+class NaturalLanguageRequest(BaseModel):
+    question: str
+    limit: Optional[int] = 100
+    reference_player: Optional[str] = None  # Account for "I", "my", etc.
+
+class ChessQLRequest(BaseModel):
+    query: str
+    limit: Optional[int] = 100
+    reference_player: Optional[str] = None  # Account for ChessQL patterns
+```
+
+#### Natural Language Search Updated
+
+The `NaturalLanguageSearch` class now accepts a dynamic `reference_player`:
+
+```python
+def search(self, query: str, show_query: bool = True, 
+           reference_player: Optional[str] = None) -> List[Dict]:
+    """
+    Args:
+        reference_player: Optional player name for "I", "my", etc.
+    """
+    sql_query = self._convert_to_sql(query, reference_player)
+    
+    # Use appropriate query_lang instance
+    if reference_player:
+        temp_query_lang = ChessQueryLanguage(self.db_path, reference_player)
+        results = temp_query_lang.execute_query(sql_query)
+    else:
+        results = self.query_lang.execute_query(sql_query)
+    
+    return results
+
+def _convert_to_sql(self, query: str, reference_player: Optional[str] = None):
+    player = reference_player or self.reference_player
+    system_prompt = self._generate_system_prompt(player)
+    
+    # Add context for the AI
+    user_message = query
+    if reference_player:
+        user_message = f"[Context: When user says 'I', 'my', 'me', they mean '{reference_player}'.]\n\n{query}"
+    
+    # Call OpenAI with context
+    response = self.client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+    )
+    return response.choices[0].message.content.strip()
+```
+
+### Example Queries with Account Context
+
+| User Query | Selected Account | Generated SQL |
+|------------|------------------|---------------|
+| "my wins" | lecorvus | `SELECT * FROM games WHERE (lecorvus won)` |
+| "games I lost" | lecorvus | `SELECT * FROM games WHERE (lecorvus lost)` |
+| "my queen sacrifices" | lecorvus | `SELECT * FROM games WHERE (lecorvus queen sacrificed)` |
+| "games where I was rated over 1500" | lecorvus | `SELECT * FROM games WHERE ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR ...)` |
+
+### Test Account Selector
+
+1. Open the app with at least one linked account
+2. Verify the "Playing as:" dropdown shows linked accounts
+3. Select an account from the dropdown
+4. Search for "my wins" 
+5. Verify only games for the selected account are returned
+6. Try "games I sacrificed queen" 
+7. Verify the query is scoped to the selected account
 
 ---
 
