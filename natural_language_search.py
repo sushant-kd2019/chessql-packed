@@ -49,10 +49,18 @@ CRITICAL RULES:
 9. Reference player is '{reference_player}' - use this for opponent queries
 10. For ELO ratings: Use white_elo or black_elo columns, NOT player_elo. Check both white_player and black_player to determine which ELO column to use
 11. For pawn promotions: Use (pawn promoted to piece) syntax, NOT (player piece promoted). When player promotes, combine (player won) AND (pawn promoted to piece)
+12. For game speed/time control type: Use the 'speed' column with values: 'ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'
 
 Available tables and fields:
-- games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
+- games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, speed, created_at
 - captures: id, game_id, move_number, side, capturing_piece, captured_piece, from_square, to_square, move_notation, piece_value, captured_value, is_exchange, is_sacrifice, created_at
+
+The 'speed' column contains the game time control category:
+- 'ultraBullet' (≤29s estimated duration)
+- 'bullet' (≤179s)
+- 'blitz' (≤479s)
+- 'rapid' (≤1499s)
+- 'classical' (≥1500s)
 
 Special query patterns:
 - Player results: (player_name won/lost/drew) for player outcomes
@@ -61,6 +69,7 @@ Special query patterns:
 - Pawn promotions: (pawn promoted to piece) for pawn promotions
 - Move conditions: Add "before move N" or "after move N" for timing
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
+- Game speed: Use speed = 'blitz' (or bullet/rapid/classical/ultraBullet) for filtering by time control type
 
 EXAMPLES:
 - "Show me games where {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won)
@@ -93,6 +102,12 @@ EXAMPLES:
 - "Show site from games where {reference_player} promoted to queen twice" → SELECT site FROM games WHERE ({reference_player} won) AND (pawn promoted to queen x 2)
 - "Count games where {reference_player} promoted to queen x 3" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND (pawn promoted to queen x 3)
 - "Find games where pawn was promoted to knight x 2" → SELECT * FROM games WHERE (pawn promoted to knight x 2)
+- "Show {reference_player} blitz games" → SELECT * FROM games WHERE ({reference_player} won OR {reference_player} lost OR {reference_player} drew) AND speed = 'blitz'
+- "How many bullet games did {reference_player} win" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND speed = 'bullet'
+- "Show all rapid games" → SELECT * FROM games WHERE speed = 'rapid'
+- "Count {reference_player} wins in blitz" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND speed = 'blitz'
+- "{reference_player} classical games where queen was sacrificed" → SELECT * FROM games WHERE ({reference_player} won OR {reference_player} lost OR {reference_player} drew) AND speed = 'classical' AND (queen sacrificed)
+- "Show games by speed category" → SELECT speed, COUNT(*) as count FROM games GROUP BY speed
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
@@ -188,10 +203,18 @@ CRITICAL RULES:
 9. Reference player is '{reference_player}' - when user says "I", "my", "me", they mean this player
 10. For ELO ratings: Use white_elo or black_elo columns, NOT player_elo. Check both white_player and black_player to determine which ELO column to use
 11. For pawn promotions: Use (pawn promoted to piece) syntax, NOT (player piece promoted). When player promotes, combine (player won) AND (pawn promoted to piece)
+12. For game speed/time control type: Use the 'speed' column with values: 'ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'
 
 Available tables and fields:
-- games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, created_at
+- games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, speed, created_at
 - captures: id, game_id, move_number, side, capturing_piece, captured_piece, from_square, to_square, move_notation, piece_value, captured_value, is_exchange, is_sacrifice, created_at
+
+The 'speed' column contains the game time control category:
+- 'ultraBullet' (≤29s estimated duration)
+- 'bullet' (≤179s)
+- 'blitz' (≤479s)
+- 'rapid' (≤1499s)
+- 'classical' (≥1500s)
 
 Special query patterns:
 - Player results: (player_name won/lost/drew) for player outcomes
@@ -200,6 +223,7 @@ Special query patterns:
 - Pawn promotions: (pawn promoted to piece) for pawn promotions
 - Move conditions: Add "before move N" or "after move N" for timing
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
+- Game speed: Use speed = 'blitz' (or bullet/rapid/classical/ultraBullet) for filtering by time control type
 
 EXAMPLES:
 - "Show me games where {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won)
@@ -218,6 +242,14 @@ EXAMPLES:
 - "Count my bishop sacrifices" → SELECT COUNT(*) FROM games WHERE ({reference_player} bishop sacrificed)
 - "Games where I was rated over 1500" → SELECT * FROM games WHERE ((white_player = '{reference_player}' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = '{reference_player}' AND CAST(black_elo AS INTEGER) > 1500))
 - "Find games where I promoted pawn to queen" → SELECT * FROM games WHERE ({reference_player} won) AND (pawn promoted to queen)
+- "Show my blitz games" → SELECT * FROM games WHERE ({reference_player} won OR {reference_player} lost OR {reference_player} drew) AND speed = 'blitz'
+- "How many bullet games did I win" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND speed = 'bullet'
+- "Show all rapid games" → SELECT * FROM games WHERE speed = 'rapid'
+- "Count my wins in blitz" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND speed = 'blitz'
+- "My classical games where I sacrificed a queen" → SELECT * FROM games WHERE ({reference_player} won OR {reference_player} lost OR {reference_player} drew) AND speed = 'classical' AND (queen sacrificed)
+- "Show games by speed category" → SELECT speed, COUNT(*) as count FROM games GROUP BY speed
+- "My win rate in bullet vs blitz" → SELECT speed, COUNT(*) as total, SUM(CASE WHEN ({reference_player} won) THEN 1 ELSE 0 END) as wins FROM games WHERE speed IN ('bullet', 'blitz') GROUP BY speed
+- "Find my rapid losses" → SELECT * FROM games WHERE ({reference_player} lost) AND speed = 'rapid'
 
 Always return ONLY the SQL query, no explanations or additional text."""
     
@@ -238,5 +270,12 @@ Always return ONLY the SQL query, no explanations or additional text."""
             "Find games where rooks were sacrificed",
             "Show me games sorted by date",
             f"Find games where {self.reference_player} won and pawn was exchanged",
-            "Show me games with the most captures"
+            "Show me games with the most captures",
+            # Speed/time control examples
+            "Show me all my blitz games",
+            f"How many bullet games did {self.reference_player} win",
+            "Show all rapid games",
+            f"Count {self.reference_player} wins in classical",
+            "Show games by speed category",
+            f"My blitz games where I sacrificed a queen",
         ]
