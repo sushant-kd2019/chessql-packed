@@ -23,13 +23,13 @@ def main():
     if not os.getenv("CHESSQL_REFERENCE_PLAYER"):
         os.environ["CHESSQL_REFERENCE_PLAYER"] = "lecorvus"
     
-    # Check if database exists
+    # Initialize database if it doesn't exist
     db_path = os.environ["CHESSQL_DB_PATH"]
     if not os.path.exists(db_path):
-        print(f"❌ Error: Database file '{db_path}' not found.")
-        print("Please run ingestion first:")
-        print("  python cli.py ingest your_games.pgn")
-        sys.exit(1)
+        print(f"📦 Database '{db_path}' not found. Creating new database...")
+        from database import ChessDatabase
+        ChessDatabase(db_path)
+        print("✅ Database initialized. Connect your Lichess account to sync games.")
     
     print("🚀 Starting ChessQL API Server...")
     print(f"📊 Database: {db_path}")
