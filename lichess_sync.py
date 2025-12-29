@@ -5,11 +5,55 @@ Handles streaming and syncing games from Lichess API.
 
 import asyncio
 import httpx
+import re
 from typing import Optional, Dict, Any, AsyncGenerator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import time
+
+
+def calculate_speed_from_time_control(time_control: str) -> str:
+    """
+    Calculate speed category from time control string.
+    
+    Lichess formula: estimated_duration = initial_time + (40 × increment)
+    
+    ≤ 29s   → ultraBullet
+    ≤ 179s  → bullet
+    ≤ 479s  → blitz
+    ≤ 1499s → rapid
+    ≥ 1500s → classical
+    
+    Args:
+        time_control: Time control string in format "initial+increment" (e.g., "300+0", "180+2")
+                     Initial time is in seconds.
+    
+    Returns:
+        Speed category: 'ultraBullet', 'bullet', 'blitz', 'rapid', or 'classical'
+    """
+    if not time_control:
+        return ""
+    
+    # Parse time control string (format: "initial+increment")
+    match = re.match(r'^(\d+)\+(\d+)$', time_control.strip())
+    if not match:
+        return ""
+    
+    initial_seconds = int(match.group(1))
+    increment = int(match.group(2))
+    estimated_duration = initial_seconds + (40 * increment)
+    
+    if estimated_duration <= 29:
+        return "ultraBullet"
+    elif estimated_duration <= 179:
+        return "bullet"
+    elif estimated_duration <= 479:
+        return "blitz"
+    elif estimated_duration <= 1499:
+        return "rapid"
+    else:
+        return "classical"
 
 
 # Lichess API configuration
@@ -102,6 +146,11 @@ class LichessGame:
             increment = clock.get("increment", 0)
             time_control = f"{initial}+{increment}"
         
+        # Get speed from API, or calculate as fallback
+        speed = data.get("speed", "")
+        if not speed and time_control:
+            speed = calculate_speed_from_time_control(time_control)
+        
         return cls(
             id=data.get("id", ""),
             pgn=data.get("pgn", ""),
@@ -113,7 +162,7 @@ class LichessGame:
             black_rating=black.get("rating"),
             result=result,
             variant=data.get("variant", "standard"),
-            speed=data.get("speed", ""),
+            speed=speed,
             time_control=time_control,
             opening_eco=opening.get("eco"),
             opening_name=opening.get("name"),
@@ -173,6 +222,7 @@ class LichessGame:
             "variant": self.variant,
             "termination": self.termination,
             "created_at_ms": self.created_at,
+            "speed": self.speed,  # bullet/blitz/rapid/classical/ultrabullet
         }
 
 

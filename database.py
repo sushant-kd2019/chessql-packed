@@ -74,8 +74,15 @@ class ChessDatabase:
             if 'lichess_id' not in columns:
                 cursor.execute("ALTER TABLE games ADD COLUMN lichess_id TEXT")
             
+            # Migration: Add speed column if it doesn't exist (bullet/blitz/rapid/classical)
+            if 'speed' not in columns:
+                cursor.execute("ALTER TABLE games ADD COLUMN speed TEXT")
+            
             # Create index for lichess_id for fast duplicate checking
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_lichess_id ON games(lichess_id)")
+            
+            # Create index for speed for filtering by game type
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_speed ON games(speed)")
             
             # Create captures table for detailed capture information
             cursor.execute("""
@@ -122,8 +129,8 @@ class ChessDatabase:
                 INSERT INTO games (
                     account_id, lichess_id, pgn_text, moves, white_player, black_player, 
                     result, date_played, event, site, round, eco_code, opening, time_control,
-                    white_elo, black_elo, variant, termination, white_result, black_result
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    white_elo, black_elo, variant, termination, white_result, black_result, speed
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 account_id,
                 pgn_data.get('lichess_id'),
@@ -144,7 +151,8 @@ class ChessDatabase:
                 pgn_data.get('variant', ''),
                 pgn_data.get('termination', ''),
                 white_result,
-                black_result
+                black_result,
+                pgn_data.get('speed', ''),
             ))
             
             game_id = cursor.lastrowid
