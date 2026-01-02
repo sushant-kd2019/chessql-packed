@@ -1,0 +1,8 @@
+/.venv/
+/__pycache__/
+/chess_games.db
+/chess_games.db-shm
+/chess_games.db-wal
+/chess_games.db-journal
+*.pgn
+.env
