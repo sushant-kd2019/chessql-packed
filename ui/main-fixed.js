@@ -55,10 +55,11 @@ app.on('window-all-closed', () => {
 
 // Start the ChessQL server
 function startChessqlServer() {
-  const chessqlPath = path.join(__dirname, '..', 'chessql');
+  const chessqlPath = path.join(__dirname, '..', 'backend');
+  const venvPython = path.join(chessqlPath, '.venv', 'bin', 'python');
   
-  // Start the ChessQL server
-  chessqlServer = spawn('python3', ['server.py'], {
+  // Start the ChessQL server using venv python
+  chessqlServer = spawn(venvPython, ['start_server.py'], {
     cwd: chessqlPath,
     stdio: 'pipe'
   });
