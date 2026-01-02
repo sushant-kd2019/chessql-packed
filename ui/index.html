@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessQL Desktop</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header with search and accounts -->
+        <header class="header">
+            <div class="header-top">
+                <div class="logo">
+                    <span class="logo-icon">♔</span>
+                    <span class="logo-text">ChessQL</span>
+                </div>
+                <div class="header-actions">
+                    <button id="accountsBtn" class="accounts-btn">
+                        <span class="accounts-icon">👤</span>
+                        <span class="accounts-label">Accounts</span>
+                        <span id="accountsBadge" class="accounts-badge hidden">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="search-container">
+                <div class="account-selector">
+                    <label for="accountSelect" class="account-selector-label">Playing as:</label>
+                    <select id="accountSelect" class="account-select">
+                        <option value="">All accounts</option>
+                        <!-- Options populated dynamically -->
+                    </select>
+                </div>
+                <input type="text" id="queryInput" placeholder="Search chess games... (e.g., 'my wins', 'games where I sacrificed queen')" />
+                <button id="searchBtn">Search</button>
+                <button id="clearBtn">Clear</button>
+            </div>
+            <div class="search-type">
+                <label>
+                    <input type="radio" name="searchType" value="natural" checked>
+                    Natural Language
+                </label>
+                <label>
+                    <input type="radio" name="searchType" value="cql">
+                    ChessQL
+                </label>
+            </div>
+        </header>
+
+        <!-- Accounts Panel (Sidebar) -->
+        <div id="accountsPanel" class="accounts-panel hidden">
+            <div class="accounts-panel-header">
+                <h2>Lichess Accounts</h2>
+                <button id="closeAccountsPanel" class="close-btn">&times;</button>
+            </div>
+            <div class="accounts-panel-content">
+                <!-- Add Account Section -->
+                <div class="add-account-section">
+                    <button id="addAccountBtn" class="add-account-btn">
+                        <span class="add-icon">+</span>
+                        <span>Link Lichess Account</span>
+                    </button>
+                </div>
+
+                <!-- Accounts List -->
+                <div id="accountsList" class="accounts-list">
+                    <div class="no-accounts">
+                        <p>No accounts linked yet.</p>
+                        <p class="hint">Click "Link Lichess Account" to get started.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Modal (for OAuth flow) -->
+        <div id="accountModal" class="modal hidden">
+            <div class="modal-content account-modal-content">
+                <div class="modal-header">
+                    <h2 id="accountModalTitle">Link Lichess Account</h2>
+                    <button id="closeAccountModal" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body account-modal-body">
+                    <div id="oauthStep" class="oauth-step">
+                        <p class="oauth-description">
+                            Connect your Lichess account to sync and analyze your games.
+                        </p>
+                        <div class="oauth-actions">
+                            <button id="startOAuthBtn" class="oauth-btn">
+                                <span class="lichess-logo">♞</span>
+                                Login with Lichess
+                            </button>
+                        </div>
+                        <div id="oauthStatus" class="oauth-status hidden">
+                            <div class="spinner"></div>
+                            <span>Waiting for authorization...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sync Progress Toast -->
+        <div id="syncToast" class="sync-toast hidden">
+            <div class="sync-toast-content">
+                <div class="sync-info">
+                    <span id="syncUsername" class="sync-username">-</span>
+                    <span id="syncStatusText" class="sync-status-text">Syncing...</span>
+                </div>
+                <div class="sync-progress-bar">
+                    <div id="syncProgressFill" class="sync-progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="sync-stats">
+                    <span id="syncGamesCount">0 games</span>
+                    <span id="syncNewGames" class="sync-new">0 new</span>
+                </div>
+            </div>
+            <button id="closeSyncToast" class="sync-toast-close">&times;</button>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="loading hidden">
+            <div class="spinner"></div>
+            <span>Searching games...</span>
+        </div>
+
+        <!-- Error message -->
+        <div id="errorMessage" class="error hidden"></div>
+
+        <!-- Results container -->
+        <main class="main-content">
+            <div id="resultsContainer" class="results-container">
+                <div class="welcome-message">
+                    <h2>Welcome to ChessQL Desktop</h2>
+                    <p>Search for chess games using natural language or ChessQL queries.</p>
+                    <div class="example-queries">
+                        <h3>Try these examples:</h3>
+                        <div class="example-query" data-query="lecorvus won">lecorvus won</div>
+                        <div class="example-query" data-query="queen sacrificed">queen sacrificed</div>
+                        <div class="example-query" data-query="pawn promoted to queen">pawn promoted to queen</div>
+                        <div class="example-query" data-query="SELECT * FROM games WHERE white_player = 'lecorvus'">SQL: lecorvus as white</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Game viewer modal -->
+        <div id="gameModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="gameTitle">Game Viewer</h2>
+                    <button id="closeModal" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="game-info-panel">
+                        <!-- Players Section -->
+                        <div class="players-section">
+                            <div class="player-card white">
+                                <div class="player-color-indicator"></div>
+                                <div class="player-details">
+                                    <span id="whitePlayerName" class="player-name">-</span>
+                                    <span id="whitePlayerElo" class="player-elo">-</span>
+                                </div>
+                            </div>
+                            <div class="vs-badge">
+                                <span id="gameResult" class="result-text">-</span>
+                            </div>
+                            <div class="player-card black">
+                                <div class="player-color-indicator"></div>
+                                <div class="player-details">
+                                    <span id="blackPlayerName" class="player-name">-</span>
+                                    <span id="blackPlayerElo" class="player-elo">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Info Pills -->
+                        <div class="quick-info-row">
+                            <div class="info-pill">
+                                <span class="pill-icon">📅</span>
+                                <span id="gameDate" class="pill-value">-</span>
+                            </div>
+                            <div class="info-pill">
+                                <span class="pill-icon">⏱️</span>
+                                <span id="gameTimeControl" class="pill-value">-</span>
+                            </div>
+                            <div class="info-pill speed-pill">
+                                <span id="gameSpeed" class="speed-badge">-</span>
+                            </div>
+                        </div>
+
+                        <!-- Details Grid -->
+                        <div class="details-grid">
+                            <div class="detail-item opening-detail">
+                                <span class="detail-label">Opening</span>
+                                <span id="gameOpening" class="detail-value truncate" title="">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Termination</span>
+                                <span id="gameTermination" class="detail-value">-</span>
+                            </div>
+                            <div class="detail-item site-detail">
+                                <span class="detail-label">Source</span>
+                                <div class="site-value-row">
+                                    <span id="gameSite" class="detail-value truncate">-</span>
+                                    <button id="copySiteBtn" class="copy-btn" title="Copy URL">📋</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-viewer">
+                        <div class="board-container">
+                            <div id="chessBoard" class="chess-board"></div>
+                        </div>
+                        <div class="moves-container">
+                            <div class="moves-header">
+                                <h3>Moves</h3>
+                                <div class="move-controls">
+                                    <button id="prevMove" disabled>← Previous</button>
+                                    <button id="nextMove" disabled>Next →</button>
+                                    <button id="firstMove" disabled>⏮ First</button>
+                                    <button id="lastMove" disabled>Last ⏭</button>
+                                </div>
+                            </div>
+                            <div id="movesList" class="moves-list"></div>
+                            <div class="board-controls">
+                                <button id="flipBoardBtn" class="flip-btn" title="Flip board (F)">🔄 Flip Board</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="chess.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
