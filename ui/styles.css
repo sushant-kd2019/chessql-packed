@@ -1626,3 +1626,244 @@ body {
         padding-bottom: 80px; /* Smaller space on mobile */
     }
 }
+
+/* ============================================================================
+   OpenAI API Key Setup Modal
+   ============================================================================ */
+
+.openai-modal .modal-content {
+    max-width: 500px;
+}
+
+.openai-modal-content {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.openai-modal-header {
+    background: transparent;
+    text-align: center;
+    padding: 30px 30px 20px;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.openai-modal-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: 600;
+}
+
+.openai-logo {
+    font-size: 48px;
+    background: linear-gradient(135deg, #10a37f 0%, #1dd1a1 100%);
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(16, 163, 127, 0.3);
+}
+
+.openai-modal-body {
+    padding: 0 30px 30px;
+    color: #b8b8d1;
+}
+
+.openai-description {
+    text-align: center;
+    margin-bottom: 24px;
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.openai-input-group {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.openai-input-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8888a0;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.openai-key-input {
+    width: 100%;
+    padding: 14px 50px 14px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: white;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.openai-key-input:focus {
+    outline: none;
+    border-color: #10a37f;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 4px rgba(16, 163, 127, 0.15);
+}
+
+.openai-key-input::placeholder {
+    color: #5a5a70;
+}
+
+.toggle-visibility-btn {
+    position: absolute;
+    right: 12px;
+    top: 34px;
+    background: none;
+    border: none;
+    color: #8888a0;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.toggle-visibility-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.openai-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    color: #ef4444;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.openai-error::before {
+    content: '⚠️';
+}
+
+.openai-help {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+.openai-help a {
+    color: #10a37f;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.openai-help a:hover {
+    color: #1dd1a1;
+    text-decoration: underline;
+}
+
+.openai-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.openai-save-btn {
+    width: 100%;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #10a37f 0%, #0d8a6a 100%);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.openai-save-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #12b589 0%, #10a37f 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(16, 163, 127, 0.3);
+}
+
+.openai-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.openai-save-btn .btn-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.openai-skip-btn {
+    width: 100%;
+    padding: 12px 24px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: #8888a0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.openai-skip-btn:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.openai-note {
+    font-size: 12px;
+    text-align: center;
+    color: #6a6a80;
+    line-height: 1.5;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.openai-note strong {
+    color: #8888a0;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Success state */
+.openai-key-input.valid {
+    border-color: #10a37f;
+}
+
+.openai-key-input.invalid {
+    border-color: #ef4444;
+}

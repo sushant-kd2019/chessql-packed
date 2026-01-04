@@ -99,6 +99,42 @@
             </div>
         </div>
 
+        <!-- OpenAI API Key Setup Modal -->
+        <div id="openaiKeyModal" class="modal openai-modal">
+            <div class="modal-content openai-modal-content">
+                <div class="modal-header openai-modal-header">
+                    <div class="openai-logo">🤖</div>
+                    <h2>Setup Natural Language Search</h2>
+                </div>
+                <div class="modal-body openai-modal-body">
+                    <p class="openai-description">
+                        To use natural language search (like "show me my wins" or "find games where I sacrificed a queen"), 
+                        you need an OpenAI API key.
+                    </p>
+                    <div class="openai-input-group">
+                        <label for="openaiKeyInput">OpenAI API Key</label>
+                        <input type="password" id="openaiKeyInput" placeholder="sk-..." class="openai-key-input" />
+                        <button id="toggleKeyVisibility" class="toggle-visibility-btn">👁</button>
+                    </div>
+                    <div id="openaiKeyError" class="openai-error hidden"></div>
+                    <div class="openai-help">
+                        <p>Don't have an API key? <a href="#" id="openaiHelpLink">Get one from OpenAI →</a></p>
+                    </div>
+                    <div class="openai-actions">
+                        <button id="saveOpenaiKeyBtn" class="openai-save-btn">
+                            <span class="btn-text">Validate & Save</span>
+                            <span class="btn-spinner hidden"></span>
+                        </button>
+                        <button id="skipOpenaiKeyBtn" class="openai-skip-btn">Skip for Now</button>
+                    </div>
+                    <p class="openai-note">
+                        <strong>Note:</strong> Without an API key, you can still use ChessQL syntax 
+                        and Lichess account sync features.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Sync Progress Toast -->
         <div id="syncToast" class="sync-toast hidden">
             <div class="sync-toast-content">

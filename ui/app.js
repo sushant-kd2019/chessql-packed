@@ -27,9 +27,13 @@ class ChessQLApp {
         this.syncIntervals = {}; // Store sync status polling intervals
         this.pendingOAuth = null; // Store pending OAuth data
         
+        // OpenAI key state
+        this.openaiKeyConfigured = false;
+        
         this.initializeElements();
         this.bindEvents();
         this.loadAccounts(); // Load accounts on startup
+        this.checkOpenAIKeyStatus(); // Check OpenAI key on startup
     }
 
     initializeElements() {
@@ -92,6 +96,15 @@ class ChessQLApp {
         this.syncGamesCount = document.getElementById('syncGamesCount');
         this.syncNewGames = document.getElementById('syncNewGames');
         this.closeSyncToast = document.getElementById('closeSyncToast');
+        
+        // OpenAI key modal elements
+        this.openaiKeyModal = document.getElementById('openaiKeyModal');
+        this.openaiKeyInput = document.getElementById('openaiKeyInput');
+        this.toggleKeyVisibilityBtn = document.getElementById('toggleKeyVisibility');
+        this.openaiKeyError = document.getElementById('openaiKeyError');
+        this.openaiHelpLink = document.getElementById('openaiHelpLink');
+        this.saveOpenaiKeyBtn = document.getElementById('saveOpenaiKeyBtn');
+        this.skipOpenaiKeyBtn = document.getElementById('skipOpenaiKeyBtn');
     }
 
     bindEvents() {
@@ -153,6 +166,20 @@ class ChessQLApp {
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
         this.closeSyncToast.addEventListener('click', () => this.hideSyncToast());
+        
+        // OpenAI key modal events
+        this.saveOpenaiKeyBtn.addEventListener('click', () => this.saveOpenAIKey());
+        this.skipOpenaiKeyBtn.addEventListener('click', () => this.hideOpenAIKeyModal());
+        this.toggleKeyVisibilityBtn.addEventListener('click', () => this.toggleKeyVisibility());
+        this.openaiHelpLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            shell.openExternal('https://platform.openai.com/api-keys');
+        });
+        this.openaiKeyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.saveOpenAIKey();
+            }
+        });
         
         // Close account modal on background click
         this.accountModal.addEventListener('click', (e) => {
@@ -1636,6 +1663,129 @@ class ChessQLApp {
 
     hideError() {
         this.errorMessage.classList.add('hidden');
+    }
+
+    // ============================================================================
+    // OpenAI API Key Management
+    // ============================================================================
+
+    async checkOpenAIKeyStatus() {
+        try {
+            const response = await fetch('http://localhost:9090/settings/openai-key/status');
+            if (!response.ok) {
+                console.log('Could not check OpenAI key status - server may not be ready');
+                // Retry after a delay if server isn't ready
+                setTimeout(() => this.checkOpenAIKeyStatus(), 2000);
+                return;
+            }
+            
+            const status = await response.json();
+            this.openaiKeyConfigured = status.configured && status.valid;
+            
+            if (!this.openaiKeyConfigured) {
+                // Show the modal after a short delay to let the app load
+                setTimeout(() => this.showOpenAIKeyModal(), 500);
+            }
+        } catch (error) {
+            console.log('Error checking OpenAI key status:', error.message);
+            // Retry after a delay if server isn't ready
+            setTimeout(() => this.checkOpenAIKeyStatus(), 2000);
+        }
+    }
+
+    showOpenAIKeyModal() {
+        this.openaiKeyModal.classList.remove('hidden');
+        this.openaiKeyInput.value = '';
+        this.openaiKeyError.classList.add('hidden');
+        this.openaiKeyInput.classList.remove('valid', 'invalid');
+        this.openaiKeyInput.focus();
+    }
+
+    hideOpenAIKeyModal() {
+        this.openaiKeyModal.classList.add('hidden');
+        this.openaiKeyInput.value = '';
+        this.openaiKeyError.classList.add('hidden');
+    }
+
+    toggleKeyVisibility() {
+        const isPassword = this.openaiKeyInput.type === 'password';
+        this.openaiKeyInput.type = isPassword ? 'text' : 'password';
+        this.toggleKeyVisibilityBtn.textContent = isPassword ? '🙈' : '👁';
+    }
+
+    async saveOpenAIKey() {
+        const apiKey = this.openaiKeyInput.value.trim();
+        
+        if (!apiKey) {
+            this.showOpenAIKeyError('Please enter an API key');
+            return;
+        }
+        
+        if (!apiKey.startsWith('sk-')) {
+            this.showOpenAIKeyError('Invalid API key format. Keys should start with "sk-"');
+            return;
+        }
+        
+        // Show loading state
+        this.saveOpenaiKeyBtn.disabled = true;
+        const btnText = this.saveOpenaiKeyBtn.querySelector('.btn-text');
+        const btnSpinner = this.saveOpenaiKeyBtn.querySelector('.btn-spinner');
+        btnText.textContent = 'Validating...';
+        btnSpinner.classList.remove('hidden');
+        this.openaiKeyError.classList.add('hidden');
+        
+        try {
+            const response = await fetch('http://localhost:9090/settings/openai-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ api_key: apiKey })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.valid) {
+                // Success!
+                this.openaiKeyInput.classList.remove('invalid');
+                this.openaiKeyInput.classList.add('valid');
+                this.openaiKeyConfigured = true;
+                
+                // Show success briefly then close
+                btnText.textContent = '✓ Saved!';
+                btnSpinner.classList.add('hidden');
+                
+                setTimeout(() => {
+                    this.hideOpenAIKeyModal();
+                    // Reset button state
+                    btnText.textContent = 'Validate & Save';
+                    this.saveOpenaiKeyBtn.disabled = false;
+                }, 1000);
+            } else {
+                // Validation failed
+                this.openaiKeyInput.classList.remove('valid');
+                this.openaiKeyInput.classList.add('invalid');
+                this.showOpenAIKeyError(result.message || 'Invalid API key');
+                
+                // Reset button
+                btnText.textContent = 'Validate & Save';
+                btnSpinner.classList.add('hidden');
+                this.saveOpenaiKeyBtn.disabled = false;
+            }
+        } catch (error) {
+            this.showOpenAIKeyError('Failed to connect to server. Please try again.');
+            
+            // Reset button
+            btnText.textContent = 'Validate & Save';
+            btnSpinner.classList.add('hidden');
+            this.saveOpenaiKeyBtn.disabled = false;
+        }
+    }
+
+    showOpenAIKeyError(message) {
+        this.openaiKeyError.textContent = message;
+        this.openaiKeyError.classList.remove('hidden');
+        this.openaiKeyInput.classList.add('invalid');
     }
 }
 

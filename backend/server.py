@@ -10,8 +10,10 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 import time
+from pathlib import Path
 from query_language import ChessQueryLanguage
 from natural_language_search import NaturalLanguageSearch
+from openai import OpenAI
 from accounts import AccountManager
 from lichess_auth import LichessAuth, LichessAuthError, verify_token, revoke_token, add_token_manually
 from lichess_sync import get_sync_manager, LichessGame, SyncStatus, LichessSyncError
@@ -160,6 +162,174 @@ async def health_check():
         "natural_search_ready": natural_search is not None,
         "auth_ready": lichess_auth is not None
     }
+
+
+# ============================================================================
+# Settings Endpoints - OpenAI API Key Management
+# ============================================================================
+
+def get_config_dir() -> Path:
+    """Get the configuration directory for storing settings."""
+    import sys
+    if sys.platform == 'darwin':  # macOS
+        config_dir = Path.home() / 'Library' / 'Application Support' / 'ChessQL'
+    elif sys.platform == 'win32':  # Windows
+        config_dir = Path(os.environ.get('APPDATA', Path.home())) / 'ChessQL'
+    else:  # Linux and others
+        config_dir = Path.home() / '.config' / 'chessql'
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
+def get_openai_key() -> Optional[str]:
+    """Get the OpenAI API key from environment or config file."""
+    # First check environment variable
+    key = os.getenv('OPENAI_API_KEY')
+    if key:
+        return key
+    
+    # Check config file
+    config_dir = get_config_dir()
+    env_file = config_dir / '.env'
+    if env_file.exists():
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('OPENAI_API_KEY='):
+                    return line.split('=', 1)[1].strip().strip('"\'')
+    return None
+
+
+def save_openai_key(api_key: str) -> None:
+    """Save the OpenAI API key to the config file."""
+    config_dir = get_config_dir()
+    env_file = config_dir / '.env'
+    
+    # Read existing content
+    existing_lines = []
+    if env_file.exists():
+        with open(env_file, 'r') as f:
+            existing_lines = [line for line in f if not line.strip().startswith('OPENAI_API_KEY=')]
+    
+    # Add/update the API key
+    existing_lines.append(f'OPENAI_API_KEY={api_key}\n')
+    
+    # Write back
+    with open(env_file, 'w') as f:
+        f.writelines(existing_lines)
+    
+    # Also set in environment for current session
+    os.environ['OPENAI_API_KEY'] = api_key
+
+
+def validate_openai_key(api_key: str) -> tuple[bool, str]:
+    """Validate an OpenAI API key by making a small test request."""
+    try:
+        client = OpenAI(api_key=api_key)
+        # Make a minimal API call to validate the key
+        response = client.models.list()
+        # If we get here, the key is valid
+        return True, "API key is valid"
+    except Exception as e:
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg or "invalid_api_key" in error_msg:
+            return False, "Invalid API key"
+        elif "429" in error_msg:
+            # Rate limited but key is valid
+            return True, "API key is valid (rate limited)"
+        else:
+            return False, f"Error validating key: {error_msg}"
+
+
+class OpenAIKeyStatus(BaseModel):
+    """Response for OpenAI API key status."""
+    configured: bool
+    valid: bool
+    natural_search_enabled: bool
+    message: str
+
+
+class OpenAIKeyRequest(BaseModel):
+    """Request to set OpenAI API key."""
+    api_key: str
+
+
+class OpenAIKeyResponse(BaseModel):
+    """Response for setting OpenAI API key."""
+    success: bool
+    valid: bool
+    message: str
+
+
+@app.get("/settings/openai-key/status", response_model=OpenAIKeyStatus)
+async def get_openai_key_status():
+    """Check if OpenAI API key is configured and valid."""
+    global natural_search
+    
+    api_key = get_openai_key()
+    
+    if not api_key:
+        return OpenAIKeyStatus(
+            configured=False,
+            valid=False,
+            natural_search_enabled=natural_search is not None,
+            message="OpenAI API key not configured"
+        )
+    
+    # Key exists, check if it's valid
+    is_valid, message = validate_openai_key(api_key)
+    
+    return OpenAIKeyStatus(
+        configured=True,
+        valid=is_valid,
+        natural_search_enabled=natural_search is not None,
+        message=message
+    )
+
+
+@app.post("/settings/openai-key", response_model=OpenAIKeyResponse)
+async def set_openai_key(request: OpenAIKeyRequest):
+    """Set and validate the OpenAI API key."""
+    global natural_search
+    
+    api_key = request.api_key.strip()
+    
+    if not api_key:
+        return OpenAIKeyResponse(
+            success=False,
+            valid=False,
+            message="API key cannot be empty"
+        )
+    
+    # Validate the key
+    is_valid, message = validate_openai_key(api_key)
+    
+    if not is_valid:
+        return OpenAIKeyResponse(
+            success=False,
+            valid=False,
+            message=message
+        )
+    
+    # Key is valid, save it
+    save_openai_key(api_key)
+    
+    # Try to initialize natural language search
+    try:
+        db_path = os.getenv("CHESSQL_DB_PATH", "chess_games.db")
+        reference_player = os.getenv("CHESSQL_REFERENCE_PLAYER", "lecorvus")
+        natural_search = NaturalLanguageSearch(db_path, api_key=api_key, reference_player=reference_player)
+        return OpenAIKeyResponse(
+            success=True,
+            valid=True,
+            message="API key saved and natural language search enabled"
+        )
+    except Exception as e:
+        return OpenAIKeyResponse(
+            success=True,
+            valid=True,
+            message=f"API key saved but failed to initialize search: {str(e)}"
+        )
 
 
 # ============================================================================
