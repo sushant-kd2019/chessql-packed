@@ -55,13 +55,41 @@ app.on('window-all-closed', () => {
 
 // Start the ChessQL server
 function startChessqlServer() {
-  const chessqlPath = path.join(__dirname, '..', 'backend');
-  const venvPython = path.join(chessqlPath, '.venv', 'bin', 'python');
+  let serverPath, serverArgs, serverCwd;
   
-  // Start the ChessQL server using venv python
-  chessqlServer = spawn(venvPython, ['start_server.py'], {
-    cwd: chessqlPath,
-    stdio: 'pipe'
+  if (app.isPackaged) {
+    // Production: Use bundled PyInstaller executable
+    const resourcesPath = process.resourcesPath;
+    serverPath = path.join(resourcesPath, 'chessql-server');
+    
+    // On Windows, add .exe extension
+    if (process.platform === 'win32') {
+      serverPath += '.exe';
+    }
+    
+    serverArgs = [];
+    serverCwd = undefined;
+    
+    console.log(`Starting bundled server: ${serverPath}`);
+  } else {
+    // Development: Use venv Python
+    const chessqlPath = path.join(__dirname, '..', 'backend');
+    const venvPython = process.platform === 'win32'
+      ? path.join(chessqlPath, '.venv', 'Scripts', 'python.exe')
+      : path.join(chessqlPath, '.venv', 'bin', 'python');
+    
+    serverPath = venvPython;
+    serverArgs = ['start_server.py'];
+    serverCwd = chessqlPath;
+    
+    console.log(`Starting dev server: ${serverPath} ${serverArgs.join(' ')} in ${serverCwd}`);
+  }
+  
+  // Start the ChessQL server
+  chessqlServer = spawn(serverPath, serverArgs, {
+    cwd: serverCwd,
+    stdio: 'pipe',
+    env: { ...process.env }
   });
 
   chessqlServer.stdout.on('data', (data) => {
@@ -70,6 +98,10 @@ function startChessqlServer() {
 
   chessqlServer.stderr.on('data', (data) => {
     console.error(`ChessQL Server Error: ${data}`);
+  });
+
+  chessqlServer.on('error', (err) => {
+    console.error(`Failed to start ChessQL Server: ${err.message}`);
   });
 
   chessqlServer.on('close', (code) => {

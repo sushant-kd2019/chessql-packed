@@ -9,16 +9,47 @@ import sys
 import uvicorn
 from pathlib import Path
 
+
+def is_packaged():
+    """Check if running as a PyInstaller packaged executable."""
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+
+def get_data_dir():
+    """Get the appropriate data directory based on platform and packaging."""
+    if sys.platform == 'darwin':  # macOS
+        data_dir = Path.home() / 'Library' / 'Application Support' / 'ChessQL'
+    elif sys.platform == 'win32':  # Windows
+        data_dir = Path(os.environ.get('APPDATA', Path.home())) / 'ChessQL'
+    else:  # Linux and others
+        data_dir = Path.home() / '.config' / 'chessql'
+    
+    # Create directory if it doesn't exist
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
 def main():
     """Start the ChessQL FastAPI server."""
     
-    # Get the directory containing this script
-    script_dir = Path(__file__).parent
-    os.chdir(script_dir)
+    # Determine if we're running as a packaged app
+    packaged = is_packaged()
     
-    # Set default environment variables if not set
-    if not os.getenv("CHESSQL_DB_PATH"):
-        os.environ["CHESSQL_DB_PATH"] = "chess_games.db"
+    if packaged:
+        # Packaged app: use Application Support folder for user data
+        data_dir = get_data_dir()
+        print(f"📁 Data directory: {data_dir}")
+        
+        # Set database path in user's data directory
+        if not os.getenv("CHESSQL_DB_PATH"):
+            os.environ["CHESSQL_DB_PATH"] = str(data_dir / "chess_games.db")
+    else:
+        # Development: use current directory
+        script_dir = Path(__file__).parent
+        os.chdir(script_dir)
+        
+        if not os.getenv("CHESSQL_DB_PATH"):
+            os.environ["CHESSQL_DB_PATH"] = "chess_games.db"
     
     if not os.getenv("CHESSQL_REFERENCE_PLAYER"):
         os.environ["CHESSQL_REFERENCE_PLAYER"] = "lecorvus"
@@ -41,13 +72,24 @@ def main():
     print("\nPress Ctrl+C to stop the server\n")
     
     # Start the server
-    uvicorn.run(
-        "server:app",
-        host="0.0.0.0",
-        port=9090,
-        reload=True,  # Enable auto-reload for development
-        log_level="info"
-    )
+    if packaged:
+        # In packaged mode, import app directly (reload doesn't work with PyInstaller)
+        from server import app
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=9090,
+            log_level="info"
+        )
+    else:
+        # In development mode, use string import for reload support
+        uvicorn.run(
+            "server:app",
+            host="0.0.0.0",
+            port=9090,
+            reload=True,
+            log_level="info"
+        )
 
 if __name__ == "__main__":
     main()

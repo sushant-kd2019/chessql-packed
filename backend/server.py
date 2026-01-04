@@ -66,7 +66,14 @@ async def startup_event():
     # Only initialize query processors if database exists
     if os.path.exists(db_path):
         query_lang = ChessQueryLanguage(db_path, reference_player)
-        natural_search = NaturalLanguageSearch(db_path, reference_player=reference_player)
+        
+        # Try to initialize natural language search (requires OpenAI API key)
+        try:
+            natural_search = NaturalLanguageSearch(db_path, reference_player=reference_player)
+        except ValueError as e:
+            print(f"⚠️  Natural language search disabled: {e}")
+            print("   Set OPENAI_API_KEY in ~/Library/Application Support/ChessQL/.env to enable")
+            natural_search = None
 
 def calculate_pagination(page_no: int, limit: int, offset: Optional[int] = None, total_count: Optional[int] = None):
     """Calculate pagination parameters."""

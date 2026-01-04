@@ -6,13 +6,33 @@ This module provides natural language to ChessQL query conversion using OpenAI.
 
 import os
 import re
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 from query_language import ChessQueryLanguage
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from multiple locations (for packaged app support)
+def _load_env_files():
+    """Load .env files from multiple possible locations."""
+    # Priority order (first found wins for each variable):
+    # 1. Already set environment variables
+    # 2. .env in current directory (development)
+    # 3. .env in user's Application Support/ChessQL (packaged app)
+    # 4. .env in user's home/.chessql (fallback)
+    
+    env_locations = [
+        Path.cwd() / '.env',  # Development
+        Path.home() / 'Library' / 'Application Support' / 'ChessQL' / '.env',  # macOS packaged
+        Path.home() / '.config' / 'chessql' / '.env',  # Linux
+        Path.home() / '.chessql' / '.env',  # Fallback
+    ]
+    
+    for env_path in env_locations:
+        if env_path.exists():
+            load_dotenv(env_path, override=False)  # Don't override existing vars
+
+_load_env_files()
 
 
 class NaturalLanguageSearch:

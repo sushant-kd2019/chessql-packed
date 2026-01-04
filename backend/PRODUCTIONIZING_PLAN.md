@@ -9,9 +9,9 @@
 - [x] Create Lichess game streaming/sync service
 - [x] Add sync API endpoints to server.py
 - [x] Build account management UI components
-- [ ] Configure PyInstaller for Python backend bundling
-- [ ] Configure electron-builder for macOS packaging
-- [ ] Create unified build scripts for the full app
+- [x] Configure PyInstaller for Python backend bundling
+- [x] Configure electron-builder for macOS packaging
+- [x] Create unified build scripts for the full app
 
 ---
 
