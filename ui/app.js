@@ -58,6 +58,7 @@ class ChessQLApp {
         this.gameDate = document.getElementById('gameDate');
         this.gameTimeControl = document.getElementById('gameTimeControl');
         this.gameSpeed = document.getElementById('gameSpeed');
+        this.gameVariant = document.getElementById('gameVariant');
         this.gameSite = document.getElementById('gameSite');
         this.copySiteBtn = document.getElementById('copySiteBtn');
         this.gameOpening = document.getElementById('gameOpening');
@@ -245,6 +246,7 @@ class ChessQLApp {
     getSelectedAccount() {
         return this.accountSelect.value || null;
     }
+
 
     updateAccountsBadge() {
         if (this.accounts.length > 0) {
@@ -832,12 +834,20 @@ class ChessQLApp {
         const thumbnail = document.createElement('div');
         thumbnail.className = 'game-thumbnail';
         
-        // Add speed badge overlay if speed is available
+        // Add speed badge overlay if speed is available (collapsible)
         if (game.speed) {
             const speedBadge = document.createElement('div');
             speedBadge.className = `speed-badge-overlay speed-${game.speed.toLowerCase()}`;
-            speedBadge.textContent = this.formatSpeed(game.speed);
+            speedBadge.innerHTML = `<span class="speed-icon">${this.getSpeedIcon(game.speed)}</span><span class="speed-text">${this.getSpeedName(game.speed)}</span>`;
             thumbnail.appendChild(speedBadge);
+        }
+        
+        // Add variant badge overlay for non-standard variants
+        if (game.variant && game.variant !== 'standard') {
+            const variantBadge = document.createElement('div');
+            variantBadge.className = `variant-badge-overlay variant-${game.variant.toLowerCase()}`;
+            variantBadge.innerHTML = `<span class="variant-icon">${this.formatVariant(game.variant)}</span><span class="variant-text">${this.getVariantFullName(game.variant)}</span>`;
+            thumbnail.appendChild(variantBadge);
         }
         
         // Create mini chess board
@@ -882,7 +892,7 @@ class ChessQLApp {
     }
 
     formatSpeed(speed) {
-        // Format speed for display
+        // Format speed for display (icon + name)
         const speedLabels = {
             'ultraBullet': '⚡ UltraBullet',
             'bullet': '🔫 Bullet',
@@ -892,6 +902,50 @@ class ChessQLApp {
             'correspondence': '📬 Correspondence'
         };
         return speedLabels[speed] || speed;
+    }
+
+    getSpeedIcon(speed) {
+        // Get just the icon for speed
+        const speedIcons = {
+            'ultraBullet': '⚡',
+            'bullet': '🔫',
+            'blitz': '⚡',
+            'rapid': '🕐',
+            'classical': '♟️',
+            'correspondence': '📬'
+        };
+        return speedIcons[speed] || '⏱️';
+    }
+
+    getSpeedName(speed) {
+        // Get just the name for speed
+        const speedNames = {
+            'ultraBullet': 'UltraBullet',
+            'bullet': 'Bullet',
+            'blitz': 'Blitz',
+            'rapid': 'Rapid',
+            'classical': 'Classical',
+            'correspondence': 'Correspondence'
+        };
+        return speedNames[speed] || speed;
+    }
+
+    formatVariant(variant) {
+        // Format variant icon for display
+        const variantIcons = {
+            'standard': '♟️',
+            'chess960': '🎲'
+        };
+        return variantIcons[variant] || variant;
+    }
+
+    getVariantFullName(variant) {
+        // Get full variant name for tooltips/hover
+        const variantNames = {
+            'standard': 'Standard',
+            'chess960': 'Chess960'
+        };
+        return variantNames[variant] || variant;
     }
 
     formatTimeControl(timeControl) {
@@ -1078,6 +1132,16 @@ class ChessQLApp {
         } else {
             this.gameSpeed.textContent = 'Unknown';
             this.gameSpeed.className = 'speed-badge';
+        }
+        
+        // Update variant badge (always show full text in modal)
+        if (game.variant && game.variant !== 'standard') {
+            this.gameVariant.innerHTML = `<span class="variant-icon">${this.formatVariant(game.variant)}</span><span class="variant-text-modal">${this.getVariantFullName(game.variant)}</span>`;
+            this.gameVariant.className = `variant-badge variant-badge-modal variant-${game.variant.toLowerCase()}`;
+            this.gameVariant.parentElement.classList.remove('hidden');
+        } else {
+            // Hide variant pill for standard games
+            this.gameVariant.parentElement.classList.add('hidden');
         }
         
         // Handle site field - make it clickable if it's a URL

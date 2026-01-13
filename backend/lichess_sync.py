@@ -63,6 +63,10 @@ LICHESS_GAMES_EXPORT_URL = f"{LICHESS_API_BASE}/games/user"
 # Rate limiting: Lichess allows 15 req/sec for authenticated users
 REQUEST_DELAY = 0.1  # 100ms between requests
 
+# Only allow standard chess and Chess960 variants
+# This filters out: antichess, atomic, crazyhouse, horde, kingOfTheHill, racingKings, threeCheck
+ALLOWED_VARIANTS = ["standard", "chess960"]
+
 
 class SyncStatus(Enum):
     """Sync operation status."""
@@ -319,7 +323,11 @@ class LichessSync:
                         try:
                             import json
                             game_data = json.loads(line)
-                            yield LichessGame.from_ndjson(game_data)
+                            game = LichessGame.from_ndjson(game_data)
+                            # Skip non-standard variants (antichess, atomic, etc.)
+                            if game.variant not in ALLOWED_VARIANTS:
+                                continue
+                            yield game
                         except Exception as e:
                             # Skip malformed lines
                             continue
