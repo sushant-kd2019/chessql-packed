@@ -122,6 +122,7 @@ class LichessGame:
     opening_name: Optional[str]
     termination: str
     moves: str
+    initial_fen: Optional[str] = None  # Starting FEN for Chess960 games
     
     @classmethod
     def from_ndjson(cls, data: Dict[str, Any]) -> "LichessGame":
@@ -172,6 +173,7 @@ class LichessGame:
             opening_name=opening.get("name"),
             termination=data.get("status", ""),
             moves=data.get("moves", ""),
+            initial_fen=data.get("initialFen"),  # Chess960 starting position
         )
     
     def to_pgn_dict(self) -> Dict[str, Any]:
@@ -200,6 +202,9 @@ class LichessGame:
             pgn_lines.append(f'[TimeControl "{self.time_control}"]')
         if self.variant != "standard":
             pgn_lines.append(f'[Variant "{self.variant.capitalize()}"]')
+        if self.initial_fen:
+            pgn_lines.append('[SetUp "1"]')
+            pgn_lines.append(f'[FEN "{self.initial_fen}"]')
         pgn_lines.append(f'[Termination "{self.termination}"]')
         
         pgn_lines.append("")
