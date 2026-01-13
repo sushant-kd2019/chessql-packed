@@ -1,6 +1,6 @@
 {
   "name": "chessql-desktop",
-  "version": "1.0.1",
+  "version": "0.0.2",
   "description": "ChessQL Desktop - A chess game analysis application with Lichess integration",
   "main": "main-fixed.js",
   "repository": {
