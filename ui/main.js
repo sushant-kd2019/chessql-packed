@@ -52,12 +52,39 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Check if server is already running on port 9090 (synchronous check)
+function isServerRunning() {
+  try {
+    const { execSync } = require('child_process');
+    const result = execSync('lsof -ti :9090', { encoding: 'utf8', timeout: 2000 });
+    const hasProcess = result.trim().length > 0;
+    console.log(`Port 9090 check: ${hasProcess ? 'Server already running (PID: ' + result.trim() + ')' : 'Port is free'}`);
+    return hasProcess;
+  } catch (err) {
+    // lsof returns exit code 1 when no process found, which throws an error
+    console.log('Port 9090 check: Port is free (no process found)');
+    return false;
+  }
+}
+
 // Start the ChessQL server
 function startChessqlServer() {
-  const chessqlPath = path.join(__dirname, '..', 'chessql');
+  // Check if server is already running (e.g., started by start-all.sh)
+  const alreadyRunning = isServerRunning();
+  if (alreadyRunning) {
+    console.log('ChessQL Server already running - skipping startup');
+    return;
+  }
+
+  const chessqlPath = path.join(__dirname, '..', 'backend');
   
-  // Start the ChessQL server
-  chessqlServer = spawn('python3', ['server.py'], {
+  // Start the ChessQL server using the virtual environment
+  const pythonPath = path.join(chessqlPath, '.venv', 'bin', 'python');
+  const serverScript = path.join(chessqlPath, 'start_server.py');
+  
+  console.log(`Starting dev server: ${pythonPath} start_server.py in ${chessqlPath}`);
+  
+  chessqlServer = spawn(pythonPath, ['start_server.py'], {
     cwd: chessqlPath,
     stdio: 'pipe'
   });
