@@ -1,3 +1,60 @@
+# ChessQL v1.0.1 — Bug Fixes 🔧
+
+**Release Date:** January 14, 2026
+
+This patch release addresses several bugs and improves overall stability.
+
+---
+
+## 🐛 Bug Fixes
+
+### Pawn Capture Detection Fix
+- **Fixed:** Pawn capture analysis now correctly detects left-direction captures (e.g., `exd4`)
+- Previously, only right-direction captures (e.g., `dxe4`) were detected due to a missing `abs()` check on file difference
+- This fix improves accuracy for CQL queries involving pawn exchanges (e.g., "pawn exchanged before move N")
+
+### Server Startup Conflict Resolution
+- **Fixed:** App now checks if the ChessQL server is already running on port 9090 before starting
+- Prevents duplicate server instances and port conflicts
+- Startup script automatically terminates any existing process on port 9090
+
+### UI Modal Display Fix
+- **Fixed:** OpenAI API key modal no longer briefly flashes on app startup
+- Modal is now properly hidden by default until explicitly triggered
+
+---
+
+## ✨ New Features
+
+### Full Sync Option
+- **New:** Added "Full Sync" functionality for Lichess game imports
+- Allows complete re-sync by deleting existing games before importing
+- Useful when you want to start fresh or resolve sync inconsistencies
+
+---
+
+## 📦 Installation
+
+### macOS (Apple Silicon)
+1. Download `ChessQL-1.0.1-arm64.dmg`
+2. Open the DMG and drag **ChessQL** to your Applications folder
+3. **First launch:** Right-click the app → Open → Open (required once to bypass Gatekeeper)
+
+---
+
+## 📁 Upgrade Notes
+
+- This is a drop-in replacement for v1.0.0
+- Your existing database and settings will be preserved
+- Simply replace the old app with the new version
+
+---
+
+**Full Changelog:** [v1.0.0...v1.0.1](https://github.com/your-repo/chessql/compare/v1.0.0...v1.0.1)
+
+---
+---
+
 # ChessQL v1.0.0 — Initial Release 🎉
 
 **Release Date:** January 4, 2026
