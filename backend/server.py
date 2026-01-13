@@ -657,6 +657,7 @@ async def verify_account(username: str):
 class SyncStartRequest(BaseModel):
     """Request for starting a sync operation."""
     max_games: Optional[int] = None  # Limit for testing
+    full_sync: Optional[bool] = False  # If True, delete all games and re-sync from scratch
 
 
 class SyncProgressResponse(BaseModel):
@@ -771,8 +772,10 @@ async def start_sync(username: str, request: SyncStartRequest = None):
     Use GET /sync/status/{username} to check progress.
     
     For incremental sync, the system automatically uses the last sync timestamp.
+    For full sync (full_sync=True), all existing games are deleted first.
     """
     import asyncio
+    from datetime import datetime
     
     if account_manager is None or chess_db is None:
         raise HTTPException(status_code=500, detail="Server not initialized")
@@ -787,13 +790,25 @@ async def start_sync(username: str, request: SyncStartRequest = None):
     if sync_manager.is_syncing(username.lower()):
         raise HTTPException(status_code=409, detail="Sync already in progress")
     
-    # Get last sync timestamp for incremental sync
-    since = account.get('last_game_at')
-    if since:
-        since = since + 1  # Start from the next millisecond
+    # Handle full sync - delete all existing games first
+    full_sync = request.full_sync if request else False
+    if full_sync:
+        # Delete all games for this account
+        deleted_count = chess_db.delete_games_by_account(account['id'])
+        print(f"Full sync: Deleted {deleted_count} games for account '{username}'")
+        
+        # Reset account sync status
+        account_manager.reset_sync_status(username)
+        
+        # Start from the beginning
+        since = None
+    else:
+        # Get last sync timestamp for incremental sync
+        since = account.get('last_game_at')
+        if since:
+            since = since + 1  # Start from the next millisecond
     
     # Initialize progress
-    from datetime import datetime
     progress = sync_manager._sync_progress[username.lower()] = sync_manager.get_progress(username.lower())
     progress.status = SyncStatus.SYNCING
     progress.started_at = datetime.now()

@@ -153,6 +153,17 @@ class AccountManager:
                 """, params)
                 conn.commit()
     
+    def reset_sync_status(self, username: str):
+        """Reset sync status for an account (for full re-sync). Sets last_sync_at, last_game_at to NULL and games_count to 0."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE accounts 
+                SET last_sync_at = NULL, last_game_at = NULL, games_count = 0
+                WHERE username = ?
+            """, (username.lower(),))
+            conn.commit()
+    
     def increment_games_count(self, username: str, count: int = 1):
         """Increment the games count for an account."""
         with sqlite3.connect(self.db_path) as conn:
