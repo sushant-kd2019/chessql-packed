@@ -64,12 +64,14 @@
         {
           "target": "dmg",
           "arch": [
+            "x64",
             "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
+            "x64",
             "arm64"
           ]
         }
@@ -107,7 +109,13 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "../backend/dist/chessql-server.exe",
+          "to": "chessql-server.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
