@@ -24,7 +24,10 @@
     "lichess",
     "pgn"
   ],
-  "author": "",
+  "author": {
+    "name": "ChessQL",
+    "email": "chessql@example.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^38.2.0",
