@@ -9,6 +9,14 @@ echo "======================================"
 echo "Starting ChessQL (Backend + UI)"
 echo "======================================"
 
+# Kill any existing process on port 9090 (ignore errors if none exists)
+EXISTING_PID=$(lsof -ti :9090 2>/dev/null)
+if [ -n "$EXISTING_PID" ]; then
+    echo "Killing existing process on port 9090 (PID: $EXISTING_PID)..."
+    kill -9 $EXISTING_PID 2>/dev/null
+    sleep 1
+fi
+
 # Start backend in background
 echo "Starting backend server..."
 cd "$ROOT_DIR/backend"
