@@ -3,6 +3,10 @@
   "version": "1.0.1",
   "description": "ChessQL Desktop - A chess game analysis application with Lichess integration",
   "main": "main-fixed.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sushant-kd2019/chessql-packed.git"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -34,6 +38,11 @@
     "appId": "com.chessql.desktop",
     "productName": "ChessQL",
     "copyright": "Copyright © 2025",
+    "publish": {
+      "provider": "github",
+      "owner": "sushant-kd2019",
+      "repo": "chessql-packed"
+    },
     "directories": {
       "output": "dist",
       "buildResources": "assets"
