@@ -53,8 +53,29 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Check if server is already running on port 9090 (synchronous check)
+function isServerRunning() {
+  try {
+    const { execSync } = require('child_process');
+    const result = execSync('lsof -ti :9090', { encoding: 'utf8', timeout: 2000 });
+    const hasProcess = result.trim().length > 0;
+    console.log(`Port 9090 check: ${hasProcess ? 'Server already running (PID: ' + result.trim() + ')' : 'Port is free'}`);
+    return hasProcess;
+  } catch (err) {
+    // lsof returns exit code 1 when no process found, which throws an error
+    console.log('Port 9090 check: Port is free (no process found)');
+    return false;
+  }
+}
+
 // Start the ChessQL server
 function startChessqlServer() {
+  // Check if server is already running (e.g., started by start-all.sh)
+  if (isServerRunning()) {
+    console.log('ChessQL Server already running - skipping startup');
+    return;
+  }
+
   let serverPath, serverArgs, serverCwd;
   
   if (app.isPackaged) {

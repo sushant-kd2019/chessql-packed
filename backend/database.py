@@ -192,6 +192,25 @@ class ChessDatabase:
             cursor.execute("SELECT COUNT(*) FROM games WHERE account_id = ?", (account_id,))
             return cursor.fetchone()[0]
     
+    def delete_games_by_account(self, account_id: int) -> int:
+        """Delete all games and their captures for a specific account. Returns count of deleted games."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # First, delete captures for all games belonging to this account
+            cursor.execute("""
+                DELETE FROM captures WHERE game_id IN (
+                    SELECT id FROM games WHERE account_id = ?
+                )
+            """, (account_id,))
+            
+            # Then delete the games
+            cursor.execute("DELETE FROM games WHERE account_id = ?", (account_id,))
+            deleted_count = cursor.rowcount
+            
+            conn.commit()
+            return deleted_count
+    
     def _calculate_player_result(self, result: str, player_color: str) -> str:
         """Calculate the result for a specific player (win/loss/draw)."""
         if result == '1-0':
