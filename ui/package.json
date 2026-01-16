@@ -1,8 +1,12 @@
 {
   "name": "chessql-desktop",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "ChessQL Desktop - A chess game analysis application with Lichess integration",
   "main": "main-fixed.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sushant-kd2019/chessql-packed.git"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -20,7 +24,10 @@
     "lichess",
     "pgn"
   ],
-  "author": "",
+  "author": {
+    "name": "ChessQL",
+    "email": "chessql@example.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^38.2.0",
@@ -34,6 +41,11 @@
     "appId": "com.chessql.desktop",
     "productName": "ChessQL",
     "copyright": "Copyright © 2025",
+    "publish": {
+      "provider": "github",
+      "owner": "sushant-kd2019",
+      "repo": "chessql-packed"
+    },
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -64,12 +76,14 @@
         {
           "target": "dmg",
           "arch": [
+            "x64",
             "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
+            "x64",
             "arm64"
           ]
         }
@@ -107,7 +121,13 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "../backend/dist/chessql-server.exe",
+          "to": "chessql-server.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

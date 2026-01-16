@@ -352,6 +352,18 @@ class ChessPieceAnalyzer:
         if move in ['O-O', 'O-O-O']:
             return None
         
+        # For pawn captures like "exd4", the source file is explicitly given in the notation
+        if piece == 'P' and 'x' in move:
+            pawn_capture_match = re.match(r'^([a-h])x([a-h][1-8])', move)
+            if pawn_capture_match:
+                source_file = pawn_capture_match.group(1)
+                piece_symbol = 'P' if side == 'white' else 'p'
+                # Find the pawn on that file that can capture to destination
+                for square, board_piece in self.board.items():
+                    if board_piece == piece_symbol and square[0] == source_file:
+                        if self._can_piece_capture_from_square(piece, square, destination, side):
+                            return square
+        
         # Find all squares where this piece could be
         possible_sources = []
         piece_symbol = piece if side == 'white' else piece.lower()
@@ -399,11 +411,14 @@ class ChessPieceAnalyzer:
         """Check if a piece can legally capture from source to destination."""
         # This is a simplified check - in a real engine this would be more complex
         if piece == 'P':
-            # Pawn capture
+            # Pawn capture - pawns capture diagonally (one file left or right, one rank forward)
+            file_diff = abs(ord(destination[0]) - ord(source[0]))
             if side == 'white':
-                return (ord(destination[0]) - ord(source[0])) == 1 and (int(destination[1]) - int(source[1])) == 1
+                rank_diff = int(destination[1]) - int(source[1])
+                return file_diff == 1 and rank_diff == 1
             else:
-                return (ord(destination[0]) - ord(source[0])) == 1 and (int(source[1]) - int(destination[1])) == 1
+                rank_diff = int(source[1]) - int(destination[1])
+                return file_diff == 1 and rank_diff == 1
         else:
             # For other pieces, just check if it's a reasonable distance
             return True  # Simplified for now
