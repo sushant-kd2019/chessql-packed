@@ -1,5 +1,5 @@
 const { ipcRenderer, shell } = require('electron');
-const { Chess } = require('chess.js');
+const { Chess, Chess960 } = require('chess.js');
 
 class ChessQLApp {
     constructor() {
@@ -1045,12 +1045,19 @@ class ChessQLApp {
         try {
             let tempChess = new Chess();
             
-            // Check for Chess960 FEN in PGN
+            // Check if this is a Chess960 game and get FEN from PGN
+            const isChess960Game = pgnText && pgnText.includes('[Variant "Chess960"]');
+            
             if (pgnText) {
                 const fenMatch = pgnText.match(/\[FEN\s+"([^"]+)"\]/);
                 if (fenMatch) {
                     try {
-                        tempChess = new Chess(fenMatch[1]);
+                        // Use Chess960 class for Chess960 games
+                        if (isChess960Game) {
+                            tempChess = new Chess960(fenMatch[1]);
+                        } else {
+                            tempChess = new Chess(fenMatch[1]);
+                        }
                     } catch (e) {
                         console.log('Failed to load FEN for thumbnail:', e);
                         tempChess = new Chess();
@@ -1322,8 +1329,15 @@ class ChessQLApp {
     }
 
     resetToStartingPosition() {
-        // Reset to starting position (uses custom FEN for Chess960)
-        if (this.startingFen) {
+        // Reset to starting position (uses Chess960 class for Chess960 games)
+        if (this.isChess960 && this.startingFen) {
+            try {
+                this.chess = new Chess960(this.startingFen);
+            } catch (e) {
+                console.error('Failed to reset to starting position:', e);
+                this.chess = new Chess();
+            }
+        } else if (this.startingFen) {
             try {
                 this.chess = new Chess(this.startingFen);
             } catch (e) {
@@ -1339,11 +1353,11 @@ class ChessQLApp {
         try {
             console.log('Loading game from moves:', moves);
             
-            // Reset chess instance
+            // Reset chess instance - use Chess960 class for Chess960 games
             if (this.isChess960 && this.startingFen) {
                 try {
-                    this.chess = new Chess(this.startingFen);
-                    console.log('Chess960 starting FEN:', this.startingFen);
+                    this.chess = new Chess960(this.startingFen);
+                    console.log('Chess960 starting FEN (using Chess960 class):', this.startingFen);
                 } catch (e) {
                     console.error('Failed to load Chess960 FEN:', e);
                     this.chess = new Chess();
@@ -1514,8 +1528,8 @@ class ChessQLApp {
                 const move = this.gameMoves[i];
                 console.log('Processing move', i, ':', move);
                 
-                // Get the move object before applying it
-                const tempChess = new Chess(this.chess.fen());
+                // Get the move object before applying it (use Chess960 for Chess960 games)
+                const tempChess = this.isChess960 ? new Chess960(this.chess.fen()) : new Chess(this.chess.fen());
                 const moveObj = tempChess.move(move, { sloppy: true });
                 
                 if (moveObj) {
@@ -1600,8 +1614,8 @@ class ChessQLApp {
                 const move = this.gameMoves[i];
                 console.log('Processing move', i, ':', move);
                 
-                // Get the move object before applying it
-                const tempChess = new Chess(this.chess.fen());
+                // Get the move object before applying it (use Chess960 for Chess960 games)
+                const tempChess = this.isChess960 ? new Chess960(this.chess.fen()) : new Chess(this.chess.fen());
                 const moveObj = tempChess.move(move, { sloppy: true });
                 
                 if (moveObj) {
