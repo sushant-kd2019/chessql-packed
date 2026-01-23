@@ -758,5 +758,11 @@ class ChessQueryLanguage:
             'SELECT black_player FROM games WHERE (knight captured pawn after move 10)',
             'SELECT COUNT(*) FROM games WHERE (bishop captured bishop before move 15)',
             'SELECT * FROM games WHERE (pawn captured queen after move 5)',
-            'SELECT COUNT(*) FROM games WHERE ("player" won) AND (queen sacrificed)'
+            'SELECT COUNT(*) FROM games WHERE ("player" won) AND (queen sacrificed)',
+            
+            # Variant queries
+            "SELECT * FROM games WHERE variant = 'standard'",
+            "SELECT * FROM games WHERE variant = 'chess960'",
+            "SELECT COUNT(*) FROM games WHERE variant = 'standard' AND (player won)",
+            "SELECT variant, COUNT(*) as count FROM games GROUP BY variant",
         ]

@@ -867,12 +867,12 @@ body {
     border-radius: 4px;
 }
 
-/* Speed badge overlay on thumbnails */
+/* Speed badge overlay on thumbnails - collapsible */
 .speed-badge-overlay {
     position: absolute;
     top: 8px;
     right: 8px;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border-radius: 12px;
     font-size: 11px;
     font-weight: 700;
@@ -880,6 +880,35 @@ body {
     z-index: 10;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    cursor: default;
+}
+
+.speed-badge-overlay .speed-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.speed-badge-overlay .speed-text {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.speed-badge-overlay:hover {
+    padding: 4px 10px;
+    gap: 4px;
+}
+
+.speed-badge-overlay:hover .speed-text {
+    max-width: 100px;
+    opacity: 1;
 }
 
 /* Speed badge in modal */
@@ -916,6 +945,89 @@ body {
 
 .speed-correspondence {
     background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+/* Variant badge overlay on game thumbnails */
+.variant-badge-overlay {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    z-index: 10;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    cursor: default;
+}
+
+.variant-badge-overlay .variant-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.variant-badge-overlay .variant-text {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.variant-badge-overlay:hover {
+    padding: 4px 10px;
+    gap: 4px;
+}
+
+.variant-badge-overlay:hover .variant-text {
+    max-width: 80px;
+    opacity: 1;
+}
+
+/* Variant badge in modal - matches speed badge styling */
+.variant-badge-modal {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: white;
+}
+
+.info-pill.variant-pill {
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+.variant-pill .variant-badge-modal {
+    padding: 8px 14px;
+    font-size: 0.85em;
+}
+
+.variant-badge-modal .variant-icon,
+.variant-badge-modal .variant-text-modal {
+    vertical-align: middle;
+}
+
+.variant-pill.hidden {
+    display: none;
+}
+
+/* Variant colors */
+.variant-standard {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+
+.variant-chess960 {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
 /* Modal styles */

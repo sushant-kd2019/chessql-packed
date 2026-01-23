@@ -1,5 +1,5 @@
 const { ipcRenderer, shell } = require('electron');
-const { Chess } = require('chess.js');
+const { Chess, Chess960 } = require('chess.js');
 
 class ChessQLApp {
     constructor() {
@@ -8,6 +8,8 @@ class ChessQLApp {
         this.currentMoveIndex = 0;
         this.chess = new Chess();
         this.gameMoves = []; // Store the moves separately
+        this.startingFen = null; // Starting FEN for Chess960 games
+        this.isChess960 = false; // Flag for Chess960 games
         
         // Pagination
         this.currentPage = 1;
@@ -58,6 +60,7 @@ class ChessQLApp {
         this.gameDate = document.getElementById('gameDate');
         this.gameTimeControl = document.getElementById('gameTimeControl');
         this.gameSpeed = document.getElementById('gameSpeed');
+        this.gameVariant = document.getElementById('gameVariant');
         this.gameSite = document.getElementById('gameSite');
         this.copySiteBtn = document.getElementById('copySiteBtn');
         this.gameOpening = document.getElementById('gameOpening');
@@ -245,6 +248,7 @@ class ChessQLApp {
     getSelectedAccount() {
         return this.accountSelect.value || null;
     }
+
 
     updateAccountsBadge() {
         if (this.accounts.length > 0) {
@@ -832,12 +836,20 @@ class ChessQLApp {
         const thumbnail = document.createElement('div');
         thumbnail.className = 'game-thumbnail';
         
-        // Add speed badge overlay if speed is available
+        // Add speed badge overlay if speed is available (collapsible)
         if (game.speed) {
             const speedBadge = document.createElement('div');
             speedBadge.className = `speed-badge-overlay speed-${game.speed.toLowerCase()}`;
-            speedBadge.textContent = this.formatSpeed(game.speed);
+            speedBadge.innerHTML = `<span class="speed-icon">${this.getSpeedIcon(game.speed)}</span><span class="speed-text">${this.getSpeedName(game.speed)}</span>`;
             thumbnail.appendChild(speedBadge);
+        }
+        
+        // Add variant badge overlay for non-standard variants
+        if (game.variant && game.variant !== 'standard') {
+            const variantBadge = document.createElement('div');
+            variantBadge.className = `variant-badge-overlay variant-${game.variant.toLowerCase()}`;
+            variantBadge.innerHTML = `<span class="variant-icon">${this.formatVariant(game.variant)}</span><span class="variant-text">${this.getVariantFullName(game.variant)}</span>`;
+            thumbnail.appendChild(variantBadge);
         }
         
         // Create mini chess board
@@ -882,7 +894,7 @@ class ChessQLApp {
     }
 
     formatSpeed(speed) {
-        // Format speed for display
+        // Format speed for display (icon + name)
         const speedLabels = {
             'ultraBullet': '⚡ UltraBullet',
             'bullet': '🔫 Bullet',
@@ -892,6 +904,50 @@ class ChessQLApp {
             'correspondence': '📬 Correspondence'
         };
         return speedLabels[speed] || speed;
+    }
+
+    getSpeedIcon(speed) {
+        // Get just the icon for speed
+        const speedIcons = {
+            'ultraBullet': '⚡',
+            'bullet': '🔫',
+            'blitz': '⚡',
+            'rapid': '🕐',
+            'classical': '♟️',
+            'correspondence': '📬'
+        };
+        return speedIcons[speed] || '⏱️';
+    }
+
+    getSpeedName(speed) {
+        // Get just the name for speed
+        const speedNames = {
+            'ultraBullet': 'UltraBullet',
+            'bullet': 'Bullet',
+            'blitz': 'Blitz',
+            'rapid': 'Rapid',
+            'classical': 'Classical',
+            'correspondence': 'Correspondence'
+        };
+        return speedNames[speed] || speed;
+    }
+
+    formatVariant(variant) {
+        // Format variant icon for display
+        const variantIcons = {
+            'standard': '♟️',
+            'chess960': '🎲'
+        };
+        return variantIcons[variant] || variant;
+    }
+
+    getVariantFullName(variant) {
+        // Get full variant name for tooltips/hover
+        const variantNames = {
+            'standard': 'Standard',
+            'chess960': 'Chess960'
+        };
+        return variantNames[variant] || variant;
     }
 
     formatTimeControl(timeControl) {
@@ -961,8 +1017,8 @@ class ChessQLApp {
         const board = document.createElement('div');
         board.className = 'chess-board-mini';
         
-        // Parse the final position from moves
-        const finalPosition = this.getFinalPosition(game.moves);
+        // Parse the final position from moves (pass PGN for Chess960 FEN)
+        const finalPosition = this.getFinalPosition(game.moves, game.pgn_text);
         
         // Create 8x8 grid
         for (let row = 0; row < 8; row++) {
@@ -985,26 +1041,44 @@ class ChessQLApp {
         return board;
     }
 
-    getFinalPosition(moves) {
+    getFinalPosition(moves, pgnText = null) {
         try {
-            // Create a temporary chess instance to get the final position
-            const tempChess = new Chess();
+            let tempChess = new Chess();
+            
+            // Check if this is a Chess960 game and get FEN from PGN
+            const isChess960Game = pgnText && pgnText.includes('[Variant "Chess960"]');
+            
+            if (pgnText) {
+                const fenMatch = pgnText.match(/\[FEN\s+"([^"]+)"\]/);
+                if (fenMatch) {
+                    try {
+                        // Use Chess960 class for Chess960 games
+                        if (isChess960Game) {
+                            tempChess = new Chess960(fenMatch[1]);
+                        } else {
+                            tempChess = new Chess(fenMatch[1]);
+                        }
+                    } catch (e) {
+                        console.log('Failed to load FEN for thumbnail:', e);
+                        tempChess = new Chess();
+                    }
+                }
+            }
             
             // Parse moves and apply them
             if (moves && moves.trim()) {
                 const moveList = moves.split(' ').filter(move => 
                     move && 
                     !move.match(/^\d+\./) && 
-                    !move.match(/^[0-9-]+$/) && // Remove result strings like "1-0"
-                    move !== '*' // Remove asterisks
+                    !move.match(/^[0-9-]+$/) &&
+                    move !== '*'
                 );
                 
                 for (const move of moveList) {
                     try {
-                        tempChess.move(move);
+                        tempChess.move(move, { sloppy: true });
                     } catch (e) {
-                        // Skip invalid moves
-                        continue;
+                        // Skip invalid moves (e.g., Chess960 castling)
                     }
                 }
             }
@@ -1080,6 +1154,16 @@ class ChessQLApp {
             this.gameSpeed.className = 'speed-badge';
         }
         
+        // Update variant badge (always show full text in modal)
+        if (game.variant && game.variant !== 'standard') {
+            this.gameVariant.innerHTML = `<span class="variant-icon">${this.formatVariant(game.variant)}</span><span class="variant-text-modal">${this.getVariantFullName(game.variant)}</span>`;
+            this.gameVariant.className = `variant-badge variant-badge-modal variant-${game.variant.toLowerCase()}`;
+            this.gameVariant.parentElement.classList.remove('hidden');
+        } else {
+            // Hide variant pill for standard games
+            this.gameVariant.parentElement.classList.add('hidden');
+        }
+        
         // Handle site field - make it clickable if it's a URL
         const site = game.site || 'Unknown';
         if (site !== 'Unknown' && (site.startsWith('http://') || site.startsWith('https://'))) {
@@ -1106,24 +1190,192 @@ class ChessQLApp {
     loadGame(game) {
         try {
             console.log('Loading game PGN:', game.pgn_text);
-            this.chess.loadPgn(game.pgn_text || '');
-            this.gameMoves = [...this.chess.history()]; // Store moves separately
-            console.log('Chess history after PGN load:', this.gameMoves);
-            this.currentMoveIndex = this.gameMoves.length; // Start at the end
+            
+            // Check if this is a Chess960 game
+            this.isChess960 = game.variant === 'chess960' || 
+                (game.pgn_text && game.pgn_text.includes('[Variant "Chess960"]'));
+            
+            // Extract starting FEN from PGN if present (for Chess960)
+            this.startingFen = null;
+            if (this.isChess960 && game.pgn_text) {
+                const fenMatch = game.pgn_text.match(/\[FEN\s+"([^"]+)"\]/);
+                if (fenMatch) {
+                    this.startingFen = fenMatch[1];
+                }
+            }
+            console.log('Is Chess960:', this.isChess960, 'Starting FEN:', this.startingFen);
+            
+            // Try to load via PGN first (works for standard games)
+            this.chess = new Chess();
+            let pgnLoaded = false;
+            
+            if (game.pgn_text && !this.isChess960) {
+                try {
+                    this.chess.loadPgn(game.pgn_text);
+                    this.gameMoves = [...this.chess.history()];
+                    pgnLoaded = true;
+                    console.log('Loaded via PGN, moves:', this.gameMoves.length);
+                } catch (e) {
+                    console.log('PGN load failed:', e.message);
+                }
+            }
+            
+            // For Chess960 or failed PGN load, use moves string
+            if (!pgnLoaded) {
+                this.loadGameFromMoves(game.moves);
+                return;
+            }
+            
+            this.currentMoveIndex = this.gameMoves.length;
             this.updateBoard();
             this.updateMovesList();
             this.updateMoveControls();
         } catch (error) {
-            console.error('Error loading game from PGN:', error);
-            // Fallback: try to load from moves string
+            console.error('Error loading game:', error);
+            this.isChess960 = false;
+            this.startingFen = null;
+            this.chess = new Chess();
             this.loadGameFromMoves(game.moves);
+        }
+    }
+
+    extractFenFromPgn(pgn) {
+        // Extract FEN from PGN headers (for Chess960 games)
+        if (!pgn) return null;
+        const fenMatch = pgn.match(/\[FEN\s+"([^"]+)"\]/);
+        return fenMatch ? fenMatch[1] : null;
+    }
+
+    convertToChess960Fen(fen) {
+        // Convert standard castling notation (KQkq) to Chess960 file-based notation
+        // Chess960 uses the file letters where the rooks are located
+        const parts = fen.split(' ');
+        if (parts.length < 3) return fen;
+        
+        const position = parts[0];
+        const castling = parts[2];
+        
+        if (castling === '-' || !castling.match(/[KQkq]/)) {
+            return fen; // No castling or already in file-based notation
+        }
+        
+        // Parse the position to find rook locations
+        const ranks = position.split('/');
+        const whiteRank = ranks[7]; // Rank 1 (white's back rank)
+        const blackRank = ranks[0]; // Rank 8 (black's back rank)
+        
+        // Expand ranks to 8 characters
+        const expandRank = (rank) => {
+            let expanded = '';
+            for (const char of rank) {
+                if (char >= '1' && char <= '8') {
+                    expanded += '.'.repeat(parseInt(char));
+                } else {
+                    expanded += char;
+                }
+            }
+            return expanded;
+        };
+        
+        const whiteExpanded = expandRank(whiteRank);
+        const blackExpanded = expandRank(blackRank);
+        
+        // Find king and rook positions
+        const whiteKingFile = whiteExpanded.indexOf('K');
+        const blackKingFile = blackExpanded.indexOf('k');
+        
+        // Find rook files
+        const findRooks = (rank, rookChar) => {
+            const rooks = [];
+            for (let i = 0; i < rank.length; i++) {
+                if (rank[i] === rookChar) rooks.push(i);
+            }
+            return rooks;
+        };
+        
+        const whiteRooks = findRooks(whiteExpanded, 'R');
+        const blackRooks = findRooks(blackExpanded, 'r');
+        
+        // Build new castling string using file letters
+        let newCastling = '';
+        const fileLetters = 'ABCDEFGH';
+        
+        // White kingside (rook to the right of king)
+        if (castling.includes('K') && whiteRooks.some(r => r > whiteKingFile)) {
+            const kingsideRook = whiteRooks.find(r => r > whiteKingFile);
+            newCastling += fileLetters[kingsideRook];
+        }
+        // White queenside (rook to the left of king)
+        if (castling.includes('Q') && whiteRooks.some(r => r < whiteKingFile)) {
+            const queensideRook = whiteRooks.filter(r => r < whiteKingFile).pop();
+            newCastling += fileLetters[queensideRook];
+        }
+        // Black kingside (rook to the right of king)
+        if (castling.includes('k') && blackRooks.some(r => r > blackKingFile)) {
+            const kingsideRook = blackRooks.find(r => r > blackKingFile);
+            newCastling += fileLetters[kingsideRook].toLowerCase();
+        }
+        // Black queenside (rook to the left of king)
+        if (castling.includes('q') && blackRooks.some(r => r < blackKingFile)) {
+            const queensideRook = blackRooks.filter(r => r < blackKingFile).pop();
+            newCastling += fileLetters[queensideRook].toLowerCase();
+        }
+        
+        if (!newCastling) newCastling = '-';
+        
+        parts[2] = newCastling;
+        console.log('Converted Chess960 FEN castling from', castling, 'to', newCastling);
+        return parts.join(' ');
+    }
+
+    resetToStartingPosition() {
+        // Reset to starting position (uses Chess960 class for Chess960 games)
+        if (this.isChess960 && this.startingFen) {
+            try {
+                this.chess = new Chess960(this.startingFen);
+            } catch (e) {
+                console.error('Failed to reset to starting position:', e);
+                this.chess = new Chess();
+            }
+        } else if (this.startingFen) {
+            try {
+                this.chess = new Chess(this.startingFen);
+            } catch (e) {
+                console.error('Failed to reset to starting position:', e);
+                this.chess = new Chess();
+            }
+        } else {
+            this.chess = new Chess();
         }
     }
 
     loadGameFromMoves(moves) {
         try {
             console.log('Loading game from moves:', moves);
-            this.chess.reset();
+            
+            // Reset chess instance - use Chess960 class for Chess960 games
+            if (this.isChess960 && this.startingFen) {
+                try {
+                    this.chess = new Chess960(this.startingFen);
+                    console.log('Chess960 starting FEN (using Chess960 class):', this.startingFen);
+                } catch (e) {
+                    console.error('Failed to load Chess960 FEN:', e);
+                    this.chess = new Chess();
+                    this.startingFen = null;
+                }
+            } else {
+                this.chess = new Chess();
+            }
+            
+            if (!moves) {
+                this.gameMoves = [];
+                this.currentMoveIndex = 0;
+                this.updateBoard();
+                this.updateMovesList();
+                this.updateMoveControls();
+                return;
+            }
+            
             const moveList = moves.split(' ').filter(move => 
                 move && 
                 !move.match(/^\d+\./) && 
@@ -1135,21 +1387,28 @@ class ChessQLApp {
             
             for (const move of moveList) {
                 try {
-                    this.chess.move(move);
-                    console.log('Applied move:', move);
+                    const result = this.chess.move(move, { sloppy: true });
+                    if (!result) {
+                        console.log('Move returned null:', move);
+                    }
                 } catch (e) {
                     console.log('Invalid move:', move, e.message);
                 }
             }
             
-            this.gameMoves = [...this.chess.history()]; // Store moves separately
-            console.log('Final chess history:', this.gameMoves);
-            this.currentMoveIndex = this.gameMoves.length; // Start at the end
+            this.gameMoves = [...this.chess.history()];
+            console.log('Final chess history:', this.gameMoves.length, 'moves');
+            this.currentMoveIndex = this.gameMoves.length;
             this.updateBoard();
             this.updateMovesList();
             this.updateMoveControls();
         } catch (error) {
             console.error('Error loading game from moves:', error);
+            this.gameMoves = [];
+            this.currentMoveIndex = 0;
+            this.updateBoard();
+            this.updateMovesList();
+            this.updateMoveControls();
         }
     }
 
@@ -1213,7 +1472,7 @@ class ChessQLApp {
         
         // If going to start, reset and show starting position
         if (moveIndex === 0) {
-            this.chess.reset();
+            this.resetToStartingPosition();
             this.updateBoard();
             this.currentMoveIndex = moveIndex;
             this.updateMoveControls();
@@ -1236,7 +1495,7 @@ class ChessQLApp {
         console.log('Going directly to move index:', moveIndex);
         
         // Reset chess to starting position
-        this.chess.reset();
+        this.resetToStartingPosition();
         
         // Apply all moves up to the target index
         for (let i = 0; i < moveIndex && i < this.gameMoves.length; i++) {
@@ -1258,7 +1517,7 @@ class ChessQLApp {
         console.log('Animating next move from', this.currentMoveIndex, 'to', targetMoveIndex);
         
         // Reset chess to current position and replay moves to ensure consistency
-        this.chess.reset();
+        this.resetToStartingPosition();
         for (let i = 0; i < this.currentMoveIndex; i++) {
             this.chess.move(this.gameMoves[i]);
         }
@@ -1269,9 +1528,9 @@ class ChessQLApp {
                 const move = this.gameMoves[i];
                 console.log('Processing move', i, ':', move);
                 
-                // Get the move object before applying it
-                const tempChess = new Chess(this.chess.fen());
-                const moveObj = tempChess.move(move);
+                // Get the move object before applying it (use Chess960 for Chess960 games)
+                const tempChess = this.isChess960 ? new Chess960(this.chess.fen()) : new Chess(this.chess.fen());
+                const moveObj = tempChess.move(move, { sloppy: true });
                 
                 if (moveObj) {
                     console.log('Move object:', moveObj);
@@ -1355,9 +1614,9 @@ class ChessQLApp {
                 const move = this.gameMoves[i];
                 console.log('Processing move', i, ':', move);
                 
-                // Get the move object before applying it
-                const tempChess = new Chess(this.chess.fen());
-                const moveObj = tempChess.move(move);
+                // Get the move object before applying it (use Chess960 for Chess960 games)
+                const tempChess = this.isChess960 ? new Chess960(this.chess.fen()) : new Chess(this.chess.fen());
+                const moveObj = tempChess.move(move, { sloppy: true });
                 
                 if (moveObj) {
                     console.log('Move object:', moveObj);
@@ -1579,7 +1838,7 @@ class ChessQLApp {
 
     goToFirstMove() {
         this.currentMoveIndex = 0;
-        this.chess.reset();
+        this.resetToStartingPosition();
         this.updateBoard();
         this.updateMoveControls();
         this.highlightCurrentMove();

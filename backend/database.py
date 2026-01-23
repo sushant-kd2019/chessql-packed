@@ -112,6 +112,7 @@ class ChessDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_eco_code ON games(eco_code)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_date_played ON games(date_played)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_event ON games(event)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_variant ON games(variant)")
             
             conn.commit()
     
@@ -300,3 +301,4 @@ class ChessDatabase:
                 'unique_players': unique_players,
                 'results': results
             }
+    

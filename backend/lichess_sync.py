@@ -63,6 +63,10 @@ LICHESS_GAMES_EXPORT_URL = f"{LICHESS_API_BASE}/games/user"
 # Rate limiting: Lichess allows 15 req/sec for authenticated users
 REQUEST_DELAY = 0.1  # 100ms between requests
 
+# Only allow standard chess and Chess960 variants
+# This filters out: antichess, atomic, crazyhouse, horde, kingOfTheHill, racingKings, threeCheck
+ALLOWED_VARIANTS = ["standard", "chess960"]
+
 
 class SyncStatus(Enum):
     """Sync operation status."""
@@ -118,6 +122,7 @@ class LichessGame:
     opening_name: Optional[str]
     termination: str
     moves: str
+    initial_fen: Optional[str] = None  # Starting FEN for Chess960 games
     
     @classmethod
     def from_ndjson(cls, data: Dict[str, Any]) -> "LichessGame":
@@ -168,6 +173,7 @@ class LichessGame:
             opening_name=opening.get("name"),
             termination=data.get("status", ""),
             moves=data.get("moves", ""),
+            initial_fen=data.get("initialFen"),  # Chess960 starting position
         )
     
     def to_pgn_dict(self) -> Dict[str, Any]:
@@ -196,6 +202,9 @@ class LichessGame:
             pgn_lines.append(f'[TimeControl "{self.time_control}"]')
         if self.variant != "standard":
             pgn_lines.append(f'[Variant "{self.variant.capitalize()}"]')
+        if self.initial_fen:
+            pgn_lines.append('[SetUp "1"]')
+            pgn_lines.append(f'[FEN "{self.initial_fen}"]')
         pgn_lines.append(f'[Termination "{self.termination}"]')
         
         pgn_lines.append("")
@@ -319,7 +328,11 @@ class LichessSync:
                         try:
                             import json
                             game_data = json.loads(line)
-                            yield LichessGame.from_ndjson(game_data)
+                            game = LichessGame.from_ndjson(game_data)
+                            # Skip non-standard variants (antichess, atomic, etc.)
+                            if game.variant not in ALLOWED_VARIANTS:
+                                continue
+                            yield game
                         except Exception as e:
                             # Skip malformed lines
                             continue

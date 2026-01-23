@@ -236,6 +236,11 @@ The 'speed' column contains the game time control category:
 - 'rapid' (≤1499s)
 - 'classical' (≥1500s)
 
+The 'variant' column contains the chess variant:
+- 'standard' - Normal chess
+- 'chess960' - Fischer Random Chess (randomized starting position)
+Note: Other variants like antichess, atomic, crazyhouse are filtered out during sync.
+
 Special query patterns:
 - Player results: (player_name won/lost/drew) for player outcomes
 - Piece events: (piece exchanged/sacrificed) for piece exchanges/sacrifices
@@ -244,6 +249,7 @@ Special query patterns:
 - Move conditions: Add "before move N" or "after move N" for timing
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
 - Game speed: Use speed = 'blitz' (or bullet/rapid/classical/ultraBullet) for filtering by time control type
+- Game variant: Use variant = 'standard' or variant = 'chess960' for filtering by variant
 
 EXAMPLES:
 - "Show me games where {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won)
@@ -270,6 +276,11 @@ EXAMPLES:
 - "Show games by speed category" → SELECT speed, COUNT(*) as count FROM games GROUP BY speed
 - "My win rate in bullet vs blitz" → SELECT speed, COUNT(*) as total, SUM(CASE WHEN ({reference_player} won) THEN 1 ELSE 0 END) as wins FROM games WHERE speed IN ('bullet', 'blitz') GROUP BY speed
 - "Find my rapid losses" → SELECT * FROM games WHERE ({reference_player} lost) AND speed = 'rapid'
+- "Show my chess960 games" → SELECT * FROM games WHERE ({reference_player} won OR {reference_player} lost OR {reference_player} drew) AND variant = 'chess960'
+- "How many standard games have I won" → SELECT COUNT(*) FROM games WHERE ({reference_player} won) AND variant = 'standard'
+- "Show games by variant" → SELECT variant, COUNT(*) as count FROM games GROUP BY variant
+- "My chess960 wins" → SELECT * FROM games WHERE ({reference_player} won) AND variant = 'chess960'
+- "Standard blitz games I won" → SELECT * FROM games WHERE ({reference_player} won) AND variant = 'standard' AND speed = 'blitz'
 
 Always return ONLY the SQL query, no explanations or additional text."""
     
@@ -298,4 +309,9 @@ Always return ONLY the SQL query, no explanations or additional text."""
             f"Count {self.reference_player} wins in classical",
             "Show games by speed category",
             f"My blitz games where I sacrificed a queen",
+            # Variant examples
+            "Show my chess960 games",
+            f"How many standard games did {self.reference_player} win",
+            "Show games by variant",
+            "My chess960 wins",
         ]
