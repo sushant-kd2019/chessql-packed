@@ -1,11 +1,36 @@
 # Chess960 Support - Known Issues
 
 **Branch Status:** Under Development  
-**Last Updated:** January 14, 2026
+**Last Updated:** January 23, 2026
 
 ## Summary
 
 Chess960 (Fischer Random) games are being ingested from Lichess but have display issues in the UI due to limitations in the `chess.js` library.
+
+## Recent Fix (Jan 23, 2026)
+
+### 1. Switched to void-57:freestyle-support fork
+Installed the `void-57:freestyle-support` fork of chess.js which has native Chess960 support:
+```json
+"chess.js": "github:void-57/chess.js#freestyle-support"
+```
+
+### 2. Updated app.js to use Chess960 class
+The fork provides a separate `Chess960` class that extends `Chess` with proper Chess960 castling support. Updated the following:
+
+1. **Import both classes:**
+   ```javascript
+   const { Chess, Chess960 } = require('chess.js');
+   ```
+
+2. **Use Chess960 class for Chess960 games in:**
+   - `loadGameFromMoves()` - main game loading
+   - `resetToStartingPosition()` - position reset
+   - `getFinalPosition()` - thumbnails
+   - `navigateToMove()` - move animation
+   - `animateMovesToPosition()` - move animation
+
+**Status:** Testing required to verify full move display and correct board positions.
 
 ## What's Working
 
