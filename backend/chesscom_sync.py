@@ -415,8 +415,11 @@ class ChessComSync:
                 if max_games and games_count >= max_games:
                     break
                 
-                # Construct full URL
-                full_url = f"{CHESSCOM_API_BASE}{archive_url}"
+                # Construct full URL (archive_url might already be full URL or relative path)
+                if archive_url.startswith("http"):
+                    full_url = archive_url
+                else:
+                    full_url = f"{CHESSCOM_API_BASE}{archive_url}"
                 
                 try:
                     response = await client.get(full_url, headers=headers)

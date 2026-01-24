@@ -606,7 +606,10 @@ async def remove_account(username: str):
         raise HTTPException(status_code=500, detail="Account manager not initialized")
     
     # Get the account to retrieve the token for revocation
-    account = account_manager.get_account(username)
+    # Try Lichess first, then Chess.com
+    account = account_manager.get_account(username, platform="lichess")
+    if not account:
+        account = account_manager.get_account(username, platform="chesscom")
     
     if not account:
         raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
@@ -615,8 +618,8 @@ async def remove_account(username: str):
     if account.get('platform') == 'lichess' and account.get('access_token'):
         await revoke_token(account['access_token'])
     
-    # Remove from local database
-    removed = account_manager.remove_account(username)
+    # Remove from local database (with platform)
+    removed = account_manager.remove_account(username, platform=account.get('platform'))
     
     if removed:
         return {"success": True, "message": f"Account '{username}' removed"}
@@ -632,10 +635,11 @@ async def verify_account(username: str):
     if account_manager is None:
         raise HTTPException(status_code=500, detail="Account manager not initialized")
     
-    account = account_manager.get_account(username)
+    # Get account (Lichess only for verification)
+    account = account_manager.get_account(username, platform="lichess")
     
     if not account:
-        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
+        raise HTTPException(status_code=404, detail=f"Lichess account '{username}' not found")
     
     # Verify token with Lichess
     account_info = await verify_token(account['access_token'])
@@ -781,10 +785,10 @@ async def start_sync(username: str, request: SyncStartRequest = None):
     if account_manager is None or chess_db is None:
         raise HTTPException(status_code=500, detail="Server not initialized")
     
-    # Get account
-    account = account_manager.get_account(username)
+    # Get account (Lichess only)
+    account = account_manager.get_account(username, platform="lichess")
     if not account:
-        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
+        raise HTTPException(status_code=404, detail=f"Lichess account '{username}' not found")
     
     # Check if sync already in progress
     sync_manager = get_sync_manager()
@@ -890,6 +894,7 @@ async def add_chesscom_account(request: ChessComAddRequest):
     Add a Chess.com account by username.
     
     Chess.com doesn't require authentication, so we just need the username.
+    Note: The same username can exist on both Lichess and Chess.com.
     """
     if account_manager is None:
         raise HTTPException(status_code=500, detail="Account manager not initialized")
@@ -901,12 +906,12 @@ async def add_chesscom_account(request: ChessComAddRequest):
             error="Invalid Chess.com username. Username must be 3-25 characters, alphanumeric with hyphens/underscores."
         )
     
-    # Check if account already exists
-    existing = account_manager.get_account(request.username)
+    # Check if Chess.com account already exists
+    existing = account_manager.get_account(request.username, platform="chesscom")
     if existing:
         return AuthCallbackResponse(
             success=False,
-            error=f"Account '{request.username}' already exists"
+            error=f"Chess.com account '{request.username}' already exists"
         )
     
     # Add account (Chess.com doesn't need access token)
@@ -1036,14 +1041,10 @@ async def start_chesscom_sync(username: str, request: SyncStartRequest = None):
     if account_manager is None or chess_db is None:
         raise HTTPException(status_code=500, detail="Server not initialized")
     
-    # Get account
-    account = account_manager.get_account(username)
+    # Get account (Chess.com only)
+    account = account_manager.get_account(username, platform="chesscom")
     if not account:
-        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
-    
-    # Verify it's a Chess.com account
-    if account.get('platform') != 'chesscom':
-        raise HTTPException(status_code=400, detail=f"Account '{username}' is not a Chess.com account")
+        raise HTTPException(status_code=404, detail=f"Chess.com account '{username}' not found")
     
     # Check if sync already in progress
     sync_manager = get_chesscom_sync_manager()
@@ -1142,6 +1143,7 @@ async def get_synced_games_count(username: str):
     if account_manager is None or chess_db is None:
         raise HTTPException(status_code=500, detail="Server not initialized")
     
+    # Get account (try both platforms, return first match)
     account = account_manager.get_account(username)
     if not account:
         raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
@@ -1150,6 +1152,7 @@ async def get_synced_games_count(username: str):
     
     return {
         "username": username,
+        "platform": account.get('platform', 'unknown'),
         "games_count": count,
         "last_sync_at": account.get('last_sync_at'),
         "last_game_at": account.get('last_game_at')
