@@ -1,15 +1,16 @@
 """
 Account Management Module
-Handles storing and retrieving Lichess account information.
+Handles storing and retrieving account information for multiple platforms (Lichess, Chess.com).
 """
 
 import sqlite3
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import re
 
 
 class AccountManager:
-    """Manages Lichess accounts in the SQLite database."""
+    """Manages accounts in the SQLite database for multiple platforms."""
     
     def __init__(self, db_path: str = "chess_games.db"):
         """Initialize the account manager with database connection."""
@@ -46,14 +47,15 @@ class AccountManager:
             
             conn.commit()
     
-    def add_account(self, username: str, access_token: str, token_expires_at: Optional[int] = None) -> int:
+    def add_account(self, username: str, access_token: str, token_expires_at: Optional[int] = None, platform: str = "lichess") -> int:
         """
-        Add a new Lichess account or update if exists.
+        Add a new account or update if exists.
         
         Args:
-            username: Lichess username
-            access_token: OAuth2 access token
+            username: Platform username
+            access_token: OAuth2 access token (for Lichess) or empty string (for Chess.com)
             token_expires_at: Unix timestamp when token expires (None = never)
+            platform: Platform name ('lichess' or 'chesscom')
         
         Returns:
             Account ID
@@ -61,14 +63,19 @@ class AccountManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            # Validate platform
+            if platform not in ["lichess", "chesscom"]:
+                raise ValueError(f"Invalid platform: {platform}. Must be 'lichess' or 'chesscom'")
+            
             # Try to insert, update if exists
             cursor.execute("""
-                INSERT INTO accounts (username, access_token, token_expires_at)
-                VALUES (?, ?, ?)
+                INSERT INTO accounts (username, access_token, token_expires_at, platform)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(username) DO UPDATE SET
                     access_token = excluded.access_token,
-                    token_expires_at = excluded.token_expires_at
-            """, (username.lower(), access_token, token_expires_at))
+                    token_expires_at = excluded.token_expires_at,
+                    platform = excluded.platform
+            """, (username.lower(), access_token, token_expires_at, platform))
             
             # Get the account ID
             cursor.execute("SELECT id FROM accounts WHERE username = ?", (username.lower(),))
@@ -111,7 +118,7 @@ class AccountManager:
             
             cursor.execute("""
                 SELECT id, username, token_expires_at, created_at, 
-                       last_sync_at, last_game_at, games_count
+                       last_sync_at, last_game_at, games_count, platform
                 FROM accounts
                 ORDER BY created_at DESC
             """)
@@ -206,4 +213,33 @@ class AccountManager:
         
         account = self.get_account(username)
         return account['access_token'] if account else None
+    
+    @staticmethod
+    def validate_chesscom_username(username: str) -> bool:
+        """
+        Validate Chess.com username format.
+        
+        Chess.com usernames:
+        - 3-25 characters
+        - Alphanumeric, hyphens, underscores
+        - Case insensitive
+        
+        Args:
+            username: Username to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        if not username:
+            return False
+        
+        # Check length
+        if len(username) < 3 or len(username) > 25:
+            return False
+        
+        # Check characters (alphanumeric, hyphens, underscores)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', username):
+            return False
+        
+        return True
 
