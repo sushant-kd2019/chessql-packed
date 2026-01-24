@@ -30,9 +30,16 @@ class AccountManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_sync_at TIMESTAMP,
                     last_game_at INTEGER,
-                    games_count INTEGER DEFAULT 0
+                    games_count INTEGER DEFAULT 0,
+                    platform TEXT DEFAULT 'lichess'
                 )
             """)
+            
+            # Migration: Add platform column if it doesn't exist (for existing databases)
+            cursor.execute("PRAGMA table_info(accounts)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'platform' not in columns:
+                cursor.execute("ALTER TABLE accounts ADD COLUMN platform TEXT DEFAULT 'lichess'")
             
             # Create index for faster lookups
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username)")

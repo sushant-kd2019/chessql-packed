@@ -78,8 +78,15 @@ class ChessDatabase:
             if 'speed' not in columns:
                 cursor.execute("ALTER TABLE games ADD COLUMN speed TEXT")
             
+            # Migration: Add chesscom_id column if it doesn't exist (for Chess.com games)
+            if 'chesscom_id' not in columns:
+                cursor.execute("ALTER TABLE games ADD COLUMN chesscom_id TEXT")
+            
             # Create index for lichess_id for fast duplicate checking
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_lichess_id ON games(lichess_id)")
+            
+            # Create index for chesscom_id for fast duplicate checking
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_chesscom_id ON games(chesscom_id)")
             
             # Create index for speed for filtering by game type
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_speed ON games(speed)")
@@ -128,13 +135,14 @@ class ChessDatabase:
             
             cursor.execute("""
                 INSERT INTO games (
-                    account_id, lichess_id, pgn_text, moves, white_player, black_player, 
+                    account_id, lichess_id, chesscom_id, pgn_text, moves, white_player, black_player, 
                     result, date_played, event, site, round, eco_code, opening, time_control,
                     white_elo, black_elo, variant, termination, white_result, black_result, speed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 account_id,
                 pgn_data.get('lichess_id'),
+                pgn_data.get('chesscom_id'),
                 pgn_data.get('pgn_text', ''),
                 pgn_data.get('moves', ''),
                 pgn_data.get('white_player', ''),
@@ -160,12 +168,17 @@ class ChessDatabase:
             conn.commit()
             return game_id
     
-    def game_exists(self, lichess_id: str) -> bool:
-        """Check if a game with the given Lichess ID already exists."""
+    def game_exists(self, lichess_id: str = None, chesscom_id: str = None) -> bool:
+        """Check if a game with the given Lichess ID or Chess.com ID already exists."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM games WHERE lichess_id = ?", (lichess_id,))
-            return cursor.fetchone() is not None
+            if lichess_id:
+                cursor.execute("SELECT 1 FROM games WHERE lichess_id = ?", (lichess_id,))
+                return cursor.fetchone() is not None
+            elif chesscom_id:
+                cursor.execute("SELECT 1 FROM games WHERE chesscom_id = ?", (chesscom_id,))
+                return cursor.fetchone() is not None
+            return False
     
     def get_latest_game_timestamp(self, account_id: int) -> Optional[int]:
         """Get the timestamp of the latest game for an account (for incremental sync)."""
