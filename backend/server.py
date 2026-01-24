@@ -23,7 +23,7 @@ from database import ChessDatabase
 app = FastAPI(
     title="ChessQL API",
     description="REST API for chess game database queries",
-    version="1.0.0"
+    version="0.0.3"
 )
 
 # Add CORS middleware for Electron app
@@ -148,7 +148,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "message": "ChessQL API",
-        "version": "1.0.0",
+        "version": "0.0.3",
         "endpoints": {
             "/cql": "Execute ChessQL queries (SQL + chess patterns)",
             "/ask": "Execute natural language queries",
