@@ -228,11 +228,14 @@ class ChessQLApp {
         // Clear existing options except "All accounts"
         this.accountSelect.innerHTML = '<option value="">All accounts</option>';
         
-        // Add account options
+        // Add account options with platform indicator
         this.accounts.forEach(account => {
             const option = document.createElement('option');
             option.value = account.username;
-            option.textContent = account.username;
+            const platform = account.platform || 'lichess';
+            const platformInfo = this.getPlatformInfo(platform);
+            option.textContent = `${account.username} ${platformInfo.icon}`;
+            option.dataset.platform = platform;
             this.accountSelect.appendChild(option);
         });
         
@@ -354,30 +357,44 @@ class ChessQLApp {
         this.accountsList.querySelectorAll('.sync-btn.primary').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.startSync(username);
+                const platform = btn.dataset.platform || 'lichess';
+                const endpoint = btn.dataset.endpoint || '/sync/start';
+                this.startSync(username, false, platform, endpoint);
             });
         });
 
         this.accountsList.querySelectorAll('.sync-btn.secondary').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.startFullSync(username);
+                const platform = btn.dataset.platform || 'lichess';
+                const endpoint = btn.dataset.endpoint || '/sync/start';
+                this.startFullSync(username, platform, endpoint);
             });
         });
 
         this.accountsList.querySelectorAll('.account-action-btn.delete').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.deleteAccount(username);
+                const platform = btn.dataset.platform || 'lichess';
+                this.deleteAccount(username, platform);
             });
         });
 
         this.accountsList.querySelectorAll('.account-action-btn.refresh').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.refreshAccountStatus(username);
+                const platform = btn.dataset.platform || 'lichess';
+                this.refreshAccountStatus(username, platform);
             });
         });
+    }
+
+    getPlatformInfo(platform) {
+        const platforms = {
+            'lichess': { name: 'Lichess', icon: '♞', color: '#4CAF50', class: 'lichess' },
+            'chesscom': { name: 'Chess.com', icon: '♟', color: '#7FA650', class: 'chesscom' }
+        };
+        return platforms[platform] || { name: platform || 'Unknown', icon: '?', color: '#999', class: 'unknown' };
     }
 
     createAccountCard(account) {
@@ -386,14 +403,22 @@ class ChessQLApp {
             : 'Never';
         const gamesCount = account.games_count || 0;
         const initial = (account.username || 'U')[0].toUpperCase();
+        const platform = account.platform || 'lichess'; // Default to lichess for backward compatibility
+        const platformInfo = this.getPlatformInfo(platform);
+        const syncEndpoint = platform === 'chesscom' ? '/sync/chesscom/start' : '/sync/start';
         
         return `
-            <div class="account-card" data-username="${account.username}">
+            <div class="account-card" data-username="${account.username}" data-platform="${platform}">
                 <div class="account-card-header">
                     <div class="account-info">
                         <div class="account-avatar">${initial}</div>
                         <div class="account-details">
-                            <span class="account-username">${account.username}</span>
+                            <div class="account-username-row">
+                                <span class="account-username">${account.username}</span>
+                                <span class="platform-badge platform-${platformInfo.class}" title="${platformInfo.name}">
+                                    ${platformInfo.icon}
+                                </span>
+                            </div>
                             <span class="account-status">
                                 <span class="status-dot"></span>
                                 Connected
@@ -401,10 +426,10 @@ class ChessQLApp {
                         </div>
                     </div>
                     <div class="account-actions">
-                        <button class="account-action-btn refresh" data-username="${account.username}" title="Refresh status">
+                        <button class="account-action-btn refresh" data-username="${account.username}" data-platform="${platform}" title="Refresh status">
                             🔄
                         </button>
-                        <button class="account-action-btn delete" data-username="${account.username}" title="Remove account">
+                        <button class="account-action-btn delete" data-username="${account.username}" data-platform="${platform}" title="Remove account">
                             🗑️
                         </button>
                     </div>
@@ -419,15 +444,15 @@ class ChessQLApp {
                         <div class="stat-label">Last Sync</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">✓</div>
-                        <div class="stat-label">Status</div>
+                        <div class="stat-value">${platformInfo.icon}</div>
+                        <div class="stat-label">${platformInfo.name}</div>
                     </div>
                 </div>
                 <div class="account-sync-section">
-                    <button class="sync-btn primary" data-username="${account.username}">
+                    <button class="sync-btn primary" data-username="${account.username}" data-platform="${platform}" data-endpoint="${syncEndpoint}">
                         🔄 Sync New Games
                     </button>
-                    <button class="sync-btn secondary" data-username="${account.username}">
+                    <button class="sync-btn secondary" data-username="${account.username}" data-platform="${platform}" data-endpoint="${syncEndpoint}">
                         Full Sync
                     </button>
                 </div>
@@ -435,17 +460,18 @@ class ChessQLApp {
         `;
     }
 
-    async startSync(username, fullSync = false) {
+    async startSync(username, fullSync = false, platform = 'lichess', endpoint = '/sync/start') {
         try {
+            const syncEndpoint = endpoint || (platform === 'chesscom' ? '/sync/chesscom/start' : '/sync/start');
             const response = await ipcRenderer.invoke('api-request', {
-                endpoint: `/sync/start/${username}`,
+                endpoint: `${syncEndpoint}/${username}`,
                 method: 'POST',
                 data: { full_sync: fullSync }
             });
 
             if (response.success) {
                 this.showSyncToast(username);
-                this.startSyncPolling(username);
+                this.startSyncPolling(username, platform);
             } else {
                 throw new Error(response.error || 'Failed to start sync');
             }
@@ -455,9 +481,9 @@ class ChessQLApp {
         }
     }
 
-    startFullSync(username) {
+    startFullSync(username, platform = 'lichess', endpoint = '/sync/start') {
         if (confirm(`This will re-sync all games for ${username}. This may take a while. Continue?`)) {
-            this.startSync(username, true);
+            this.startSync(username, true, platform, endpoint);
         }
     }
 
@@ -474,17 +500,20 @@ class ChessQLApp {
         this.syncToast.classList.add('hidden');
     }
 
-    startSyncPolling(username) {
+    startSyncPolling(username, platform = 'lichess') {
         // Clear any existing interval
         if (this.syncIntervals[username]) {
             clearInterval(this.syncIntervals[username]);
         }
 
+        // Determine status endpoint based on platform
+        const statusEndpoint = platform === 'chesscom' ? `/sync/chesscom/status/${username}` : `/sync/status/${username}`;
+
         // Poll every 1 second
         this.syncIntervals[username] = setInterval(async () => {
             try {
                 const response = await ipcRenderer.invoke('api-request', {
-                    endpoint: `/sync/status/${username}`,
+                    endpoint: statusEndpoint,
                     method: 'GET'
                 });
 
@@ -828,6 +857,25 @@ class ChessQLApp {
         this.resultsContainer.appendChild(paginationDiv);
     }
 
+    detectGamePlatform(game) {
+        // Detect platform from site URL or game ID fields
+        if (game.site) {
+            if (game.site.includes('lichess.org')) {
+                return 'lichess';
+            } else if (game.site.includes('chess.com')) {
+                return 'chesscom';
+            }
+        }
+        // Check for ID fields
+        if (game.lichess_id) {
+            return 'lichess';
+        }
+        if (game.chesscom_id) {
+            return 'chesscom';
+        }
+        return null;
+    }
+
     createGameCard(game, index) {
         const card = document.createElement('div');
         card.className = 'game-card';
@@ -835,6 +883,17 @@ class ChessQLApp {
 
         const thumbnail = document.createElement('div');
         thumbnail.className = 'game-thumbnail';
+        
+        // Detect and add platform badge
+        const platform = this.detectGamePlatform(game);
+        if (platform) {
+            const platformInfo = this.getPlatformInfo(platform);
+            const platformBadge = document.createElement('div');
+            platformBadge.className = `platform-badge-overlay platform-${platformInfo.class}`;
+            platformBadge.innerHTML = `<span class="platform-icon">${platformInfo.icon}</span><span class="platform-text">${platformInfo.name}</span>`;
+            platformBadge.title = platformInfo.name;
+            thumbnail.appendChild(platformBadge);
+        }
         
         // Add speed badge overlay if speed is available (collapsible)
         if (game.speed) {

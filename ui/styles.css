@@ -232,10 +232,42 @@ body {
     flex-direction: column;
 }
 
+.account-username-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .account-username {
     font-weight: 600;
     font-size: 15px;
     color: #333;
+}
+
+.platform-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+}
+
+.platform-badge.platform-lichess {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+}
+
+.platform-badge.platform-chesscom {
+    background: linear-gradient(135deg, #7FA650 0%, #6d8f45 100%);
+}
+
+.platform-badge.platform-unknown {
+    background: #999;
 }
 
 .account-status {
@@ -865,6 +897,47 @@ body {
     background: #f0f0ff;
     padding: 2px 8px;
     border-radius: 4px;
+}
+
+/* Platform badge overlay on game thumbnails */
+.platform-badge-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    z-index: 5;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.platform-badge-overlay.platform-lichess {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.95) 0%, rgba(69, 160, 73, 0.95) 100%);
+}
+
+.platform-badge-overlay.platform-chesscom {
+    background: linear-gradient(135deg, rgba(127, 166, 80, 0.95) 0%, rgba(109, 143, 69, 0.95) 100%);
+}
+
+.platform-badge-overlay.platform-unknown {
+    background: rgba(153, 153, 153, 0.95);
+}
+
+.platform-icon {
+    font-size: 12px;
+}
+
+.platform-text {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Speed badge overlay on thumbnails - collapsible */
