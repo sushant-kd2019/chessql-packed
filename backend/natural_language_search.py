@@ -131,7 +131,7 @@ EXAMPLES:
 
 Always return ONLY the SQL query, no explanations or additional text."""
 
-    def search(self, natural_language_query: str, show_query: bool = True, reference_player: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search(self, natural_language_query: str, show_query: bool = True, reference_player: Optional[str] = None, account_id: Optional[int] = None, platform: Optional[str] = None) -> List[Dict[str, Any]]:
         """Convert natural language query to ChessQL and execute it.
         
         Args:
@@ -139,51 +139,69 @@ Always return ONLY the SQL query, no explanations or additional text."""
             show_query: Whether to print the generated SQL query
             reference_player: Optional player name to use as context for "I", "my", etc.
                              If not provided, uses the default reference player.
+            account_id: Optional account ID to filter games by
+            platform: Optional platform to filter by (lichess, chesscom)
         """
         try:
             # Convert natural language to SQL with optional reference player override
-            sql_query = self._convert_to_sql(natural_language_query, reference_player)
+            sql_query = self._convert_to_sql(natural_language_query, reference_player, platform)
             
             if not sql_query:
                 return [{"error": "Could not convert natural language query to SQL"}]
             
-            # Show the generated SQL query if requested
-            if show_query:
-                print(f"Generated SQL: {sql_query}")
-                print("-" * 50)
-            
-            # Execute the SQL query using the appropriate reference player
-            if reference_player:
-                # Create a temporary query_lang instance with the specified reference player
+            # Execute the SQL query using the appropriate reference player, account_id, and platform
+            if reference_player or account_id or platform:
+                # Create a temporary query_lang instance with the specified parameters
                 from query_language import ChessQueryLanguage
-                temp_query_lang = ChessQueryLanguage(self.query_lang.db_path, reference_player)
-                results = temp_query_lang.execute_query(sql_query)
+                temp_query_lang = ChessQueryLanguage(
+                    self.query_lang.db_path, 
+                    reference_player or self.reference_player, 
+                    account_id=account_id,
+                    platform=platform
+                )
+                results = temp_query_lang.execute_query(sql_query, account_id=account_id, platform=platform, show_final_query=show_query)
             else:
-                results = self.query_lang.execute_query(sql_query)
+                results = self.query_lang.execute_query(sql_query, account_id=account_id, platform=platform, show_final_query=show_query)
+            
+            # Show the generated SQL query if requested (after filters are applied)
+            if show_query:
+                print(f"Generated SQL (before filters): {sql_query}")
+                if account_id:
+                    print(f"Account ID filter: {account_id}")
+                if platform:
+                    print(f"Platform filter: {platform}")
+                print("-" * 50)
             
             return results
             
         except Exception as e:
             return [{"error": f"Error processing query: {str(e)}"}]
     
-    def _convert_to_sql(self, natural_language_query: str, reference_player: Optional[str] = None) -> Optional[str]:
+    def _convert_to_sql(self, natural_language_query: str, reference_player: Optional[str] = None, platform: Optional[str] = None) -> Optional[str]:
         """Convert natural language query to SQL using OpenAI.
         
         Args:
             natural_language_query: The user's question
             reference_player: Optional player name to override the default reference player
+            platform: Optional platform to filter by (lichess, chesscom)
         """
         try:
             # Use override player or default
             player = reference_player or self.reference_player
             
             # Generate prompt with the appropriate reference player
-            system_prompt = self._generate_system_prompt(player)
+            system_prompt = self._generate_system_prompt(player, platform)
             
             # Add context about who is asking if a specific player is selected
             user_message = natural_language_query
+            context_parts = []
             if reference_player:
-                user_message = f"[Context: The user is asking about their account '{reference_player}'. When they say 'I', 'my', 'me', they mean '{reference_player}'.]\n\n{natural_language_query}"
+                context_parts.append(f"The user is asking about their account '{reference_player}'. When they say 'I', 'my', 'me', they mean '{reference_player}'.")
+            if platform:
+                platform_name = "Lichess" if platform == "lichess" else "Chess.com"
+                context_parts.append(f"Only show games from {platform_name} (platform = '{platform}').")
+            if context_parts:
+                user_message = f"[Context: {' '.join(context_parts)}]\n\n{natural_language_query}"
             
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -207,8 +225,13 @@ Always return ONLY the SQL query, no explanations or additional text."""
             print(f"Error calling OpenAI: {e}")
             return None
     
-    def _generate_system_prompt(self, reference_player: str) -> str:
-        """Generate the system prompt with the specified reference player."""
+    def _generate_system_prompt(self, reference_player: str, platform: Optional[str] = None) -> str:
+        """Generate the system prompt with the specified reference player and optional platform."""
+        platform_filter_note = ""
+        if platform:
+            platform_name = "Lichess" if platform == "lichess" else "Chess.com"
+            platform_filter_note = f"\n13. Platform filtering: When platform is specified, add AND (lichess_id IS NOT NULL) for Lichess or AND (chesscom_id IS NOT NULL) for Chess.com. Current platform filter: {platform_name}"
+        
         return f"""You are a ChessQL query generator. Convert natural language questions about chess games into SQL queries.
 
 CRITICAL RULES:
@@ -223,10 +246,10 @@ CRITICAL RULES:
 9. Reference player is '{reference_player}' - when user says "I", "my", "me", they mean this player
 10. For ELO ratings: Use white_elo or black_elo columns, NOT player_elo. Check both white_player and black_player to determine which ELO column to use
 11. For pawn promotions: Use (pawn promoted to piece) syntax, NOT (player piece promoted). When player promotes, combine (player won) AND (pawn promoted to piece)
-12. For game speed/time control type: Use the 'speed' column with values: 'ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'
+12. For game speed/time control type: Use the 'speed' column with values: 'ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'{platform_filter_note}
 
 Available tables and fields:
-- games: id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, speed, created_at
+- games: id, account_id, white_player, black_player, result, date_played, event, site, round, eco_code, opening, time_control, white_elo, black_elo, variant, termination, white_result, black_result, speed, created_at, lichess_id, chesscom_id
 - captures: id, game_id, move_number, side, capturing_piece, captured_piece, from_square, to_square, move_notation, piece_value, captured_value, is_exchange, is_sacrifice, created_at
 
 The 'speed' column contains the game time control category:
@@ -250,6 +273,7 @@ Special query patterns:
 - Sorting: Add ORDER BY column [ASC/DESC] for sorting
 - Game speed: Use speed = 'blitz' (or bullet/rapid/classical/ultraBullet) for filtering by time control type
 - Game variant: Use variant = 'standard' or variant = 'chess960' for filtering by variant
+- Platform filtering: When platform is specified, add AND (lichess_id IS NOT NULL) for Lichess or AND (chesscom_id IS NOT NULL) for Chess.com
 
 EXAMPLES:
 - "Show me games where {reference_player} won" → SELECT * FROM games WHERE ({reference_player} won)

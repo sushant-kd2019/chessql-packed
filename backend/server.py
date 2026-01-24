@@ -114,7 +114,9 @@ class ChessQLRequest(BaseModel):
     limit: Optional[int] = 100
     page_no: Optional[int] = 1
     offset: Optional[int] = None
-    reference_player: Optional[str] = None  # The account to use for ChessQL patterns
+    account_id: Optional[int] = None  # Account ID to filter games by
+    reference_player: Optional[str] = None  # The account username for ChessQL patterns ("I", "my", etc.)
+    platform: Optional[str] = None  # Platform to filter by (lichess, chesscom)
 
 class NaturalLanguageRequest(BaseModel):
     """Request model for natural language queries."""
@@ -122,7 +124,9 @@ class NaturalLanguageRequest(BaseModel):
     limit: Optional[int] = 100
     page_no: Optional[int] = 1
     offset: Optional[int] = None
-    reference_player: Optional[str] = None  # The account to scope queries to (for "I", "my", etc.)
+    account_id: Optional[int] = None  # Account ID to filter games by
+    reference_player: Optional[str] = None  # The account username to scope queries to (for "I", "my", etc.)
+    platform: Optional[str] = None  # Platform to filter by (lichess, chesscom)
 
 class QueryResponse(BaseModel):
     """Response model for query results."""
@@ -1181,13 +1185,14 @@ async def execute_chessql_query(request: ChessQLRequest):
             raise HTTPException(status_code=500, detail="Query language not initialized")
         
         # Use reference_player override if provided, otherwise use default query_lang
-        if request.reference_player:
+        if request.reference_player or request.account_id or request.platform:
             from query_language import ChessQueryLanguage
             db_path = os.getenv("CHESSQL_DB_PATH", "chess_games.db")
-            temp_query_lang = ChessQueryLanguage(db_path, request.reference_player)
-            results = temp_query_lang.execute_query(request.query)
+            reference_player = request.reference_player or query_lang.reference_player
+            temp_query_lang = ChessQueryLanguage(db_path, reference_player, account_id=request.account_id, platform=request.platform)
+            results = temp_query_lang.execute_query(request.query, account_id=request.account_id, platform=request.platform)
         else:
-            results = query_lang.execute_query(request.query)
+            results = query_lang.execute_query(request.query, account_id=request.account_id, platform=request.platform)
         
         total_count = len(results)
         
@@ -1254,11 +1259,20 @@ async def execute_natural_language_query(request: NaturalLanguageRequest):
         if natural_search is None:
             raise HTTPException(status_code=500, detail="Natural language search not initialized")
         
-        # Execute the natural language query with optional reference player override
+        # Debug: Print received parameters
+        print(f"Natural language query received:")
+        print(f"  Question: {request.question}")
+        print(f"  Account ID: {request.account_id}")
+        print(f"  Reference Player: {request.reference_player}")
+        print(f"  Platform: {request.platform}")
+        
+        # Execute the natural language query with optional reference player and account_id override
         results = natural_search.search(
             request.question, 
             show_query=True,
-            reference_player=request.reference_player
+            reference_player=request.reference_player,
+            account_id=request.account_id,
+            platform=request.platform
         )
         total_count = len(results)
         

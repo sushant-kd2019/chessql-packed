@@ -11,23 +11,70 @@ import re
 class ChessQueryLanguage:
     """Simplified query language processor for chess game searches."""
     
-    def __init__(self, db_path: str = "chess_games.db", reference_player: str = "lecorvus"):
+    def __init__(self, db_path: str = "chess_games.db", reference_player: str = "lecorvus", account_id: Optional[int] = None, platform: Optional[str] = None):
         """Initialize the query language with database connection."""
         self.db_path = db_path  # Store for later reference
         self.db = ChessDatabase(db_path)
         self.reference_player = reference_player
+        self.account_id = account_id  # Account ID for filtering games
+        self.platform = platform  # Platform for filtering games
     
-    def execute_query(self, query: str) -> List[Dict[str, Any]]:
-        """Execute a query and return results."""
+    def execute_query(self, query: str, account_id: Optional[int] = None, platform: Optional[str] = None, show_final_query: bool = False) -> List[Dict[str, Any]]:
+        """Execute a query and return results.
+        
+        Args:
+            query: SQL query string
+            account_id: Optional account ID to filter games by. If provided, overrides self.account_id.
+            platform: Optional platform to filter by. If provided, overrides self.platform.
+            show_final_query: Whether to print the final SQL query after filters are applied.
+        """
         query = query.strip()
+        
+        # Use provided values or fall back to instance values
+        filter_account_id = account_id if account_id is not None else self.account_id
+        filter_platform = platform if platform is not None else self.platform
         
         # Check if it's a regex query for moves (starts with /regex/)
         if query.startswith('/') and query.endswith('/'):
             regex_pattern = query[1:-1]  # Remove the slashes
-            return self.db.search_moves(regex_pattern)
+            results = self.db.search_moves(regex_pattern)
+            # Apply account_id filter if specified
+            if filter_account_id:
+                results = [r for r in results if r.get('account_id') == filter_account_id]
+            # Apply platform filter if specified
+            if filter_platform:
+                if filter_platform == 'lichess':
+                    results = [r for r in results if r.get('lichess_id')]
+                elif filter_platform == 'chesscom':
+                    results = [r for r in results if r.get('chesscom_id')]
+            return results
         
         # Pre-process player result conditions to convert them to explicit field queries
         query = self._preprocess_player_result_conditions(query)
+        
+        # Add account_id filter if specified
+        if filter_account_id:
+            query = self._add_account_filter(query, filter_account_id)
+        
+        # Add platform filter if specified (but only if not already in query from natural language)
+        # Note: Natural language search may already add platform filter, so we skip if it exists
+        if filter_platform:
+            # Check if platform filter already exists in query
+            platform_filter_exists = False
+            if filter_platform == 'lichess' and 'lichess_id IS NOT NULL' in query:
+                platform_filter_exists = True
+            elif filter_platform == 'chesscom' and 'chesscom_id IS NOT NULL' in query:
+                platform_filter_exists = True
+            
+            if not platform_filter_exists:
+                query = self._add_platform_filter(query, filter_platform)
+        
+        # Show final query after all filters are applied
+        if show_final_query:
+            print(f"Final SQL (after filters): {query}")
+            # Don't execute twice, just show the query
+            print(f"Filter account_id: {filter_account_id}, Filter platform: {filter_platform}")
+            print("-" * 50)
         
         # Check for SQL queries with capture conditions
         if self._has_capture_condition(query):
@@ -35,6 +82,42 @@ class ChessQueryLanguage:
         
         # Otherwise, treat as regular SQL query
         return self.db.execute_sql_query(query)
+    
+    def _add_account_filter(self, query: str, account_id: int) -> str:
+        """Add account_id filter to SQL query."""
+        import re
+        
+        # Check if account_id filter already exists
+        if f'account_id = {account_id}' in query or f'account_id={account_id}' in query:
+            return query
+        
+        # Check if query already has a WHERE clause
+        where_match = re.search(r'\bWHERE\b', query, re.IGNORECASE)
+        if where_match:
+            # Find the end of the WHERE clause (before ORDER BY, GROUP BY, LIMIT, or end of query)
+            where_end = len(query)
+            for keyword in ['ORDER BY', 'GROUP BY', 'LIMIT']:
+                match = re.search(rf'\b{keyword}\b', query[where_match.end():], re.IGNORECASE)
+                if match:
+                    where_end = where_match.end() + match.start()
+                    break
+            
+            # Insert AND account_id = X before ORDER BY/GROUP BY/LIMIT or at end
+            before_clause = query[:where_end].rstrip()
+            after_clause = query[where_end:].lstrip()
+            query = before_clause + f' AND account_id = {account_id} ' + after_clause
+        else:
+            # Add WHERE clause with account_id filter
+            # Insert before ORDER BY, GROUP BY, or LIMIT if they exist
+            insert_pos = len(query)
+            for keyword in ['ORDER BY', 'GROUP BY', 'LIMIT']:
+                match = re.search(rf'\b{keyword}\b', query, re.IGNORECASE)
+                if match and match.start() < insert_pos:
+                    insert_pos = match.start()
+            
+            query = query[:insert_pos].rstrip() + f' WHERE account_id = {account_id} ' + query[insert_pos:].lstrip()
+        
+        return query
     
     def _preprocess_player_result_conditions(self, query: str) -> str:
         """Pre-process player result conditions to convert them to explicit field queries."""
