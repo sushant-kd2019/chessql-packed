@@ -81,8 +81,10 @@ class ChessQLApp {
         this.accountsBadge = document.getElementById('accountsBadge');
         this.accountsPanel = document.getElementById('accountsPanel');
         this.closeAccountsPanel = document.getElementById('closeAccountsPanel');
-        this.addLichessAccountBtn = document.getElementById('addLichessAccountBtn');
-        this.addChesscomAccountBtn = document.getElementById('addChesscomAccountBtn');
+        this.addAccountBtn = document.getElementById('addAccountBtn');
+        this.platformSelectionStep = document.getElementById('platformSelectionStep');
+        this.selectLichessBtn = document.getElementById('selectLichessBtn');
+        this.selectChesscomBtn = document.getElementById('selectChesscomBtn');
         this.accountsList = document.getElementById('accountsList');
         this.accountModal = document.getElementById('accountModal');
         this.closeAccountModal = document.getElementById('closeAccountModal');
@@ -172,11 +174,14 @@ class ChessQLApp {
         // Account panel events
         this.accountsBtn.addEventListener('click', () => this.toggleAccountsPanel());
         this.closeAccountsPanel.addEventListener('click', () => this.hideAccountsPanel());
-        if (this.addLichessAccountBtn) {
-            this.addLichessAccountBtn.addEventListener('click', () => this.showAccountModal('lichess'));
+        if (this.addAccountBtn) {
+            this.addAccountBtn.addEventListener('click', () => this.showAccountModal());
         }
-        if (this.addChesscomAccountBtn) {
-            this.addChesscomAccountBtn.addEventListener('click', () => this.showChesscomAccountModal());
+        if (this.selectLichessBtn) {
+            this.selectLichessBtn.addEventListener('click', () => this.selectPlatform('lichess'));
+        }
+        if (this.selectChesscomBtn) {
+            this.selectChesscomBtn.addEventListener('click', () => this.selectPlatform('chesscom'));
         }
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
@@ -253,25 +258,40 @@ class ChessQLApp {
         // Add account options with platform indicator
         this.accounts.forEach(account => {
             const option = document.createElement('option');
-            option.value = account.username;
+            // Store account_id as value for proper filtering
+            option.value = account.id.toString();
             const platform = account.platform || 'lichess';
             const platformInfo = this.getPlatformInfo(platform);
             option.textContent = `${account.username} ${platformInfo.icon}`;
             option.dataset.platform = platform;
+            option.dataset.username = account.username;
             this.accountSelect.appendChild(option);
         });
         
         // Restore selection if still valid
-        if (currentValue && this.accounts.some(a => a.username === currentValue)) {
-            this.accountSelect.value = currentValue;
+        if (currentValue) {
+            const matchingAccount = this.accounts.find(a => a.id.toString() === currentValue);
+            if (matchingAccount) {
+                this.accountSelect.value = currentValue;
+            }
         } else if (this.accounts.length === 1) {
             // Auto-select if only one account
-            this.accountSelect.value = this.accounts[0].username;
+            this.accountSelect.value = this.accounts[0].id.toString();
         }
     }
 
     getSelectedAccount() {
-        return this.accountSelect.value || null;
+        const selectedValue = this.accountSelect.value;
+        if (!selectedValue) {
+            return null;
+        }
+        // Return account object with id, username, and platform
+        const account = this.accounts.find(a => a.id.toString() === selectedValue);
+        return account ? {
+            id: account.id,
+            username: account.username,
+            platform: account.platform || 'lichess'
+        } : null;
     }
 
 
@@ -301,9 +321,26 @@ class ChessQLApp {
         this.accountsPanel.classList.add('hidden');
     }
 
-    showAccountModal(platform = 'lichess') {
+    showAccountModal() {
         this.accountModal.classList.remove('hidden');
         const titleEl = document.getElementById('accountModalTitle');
+        
+        // Show platform selection step, hide others
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.remove('hidden');
+        if (this.oauthStep) this.oauthStep.classList.add('hidden');
+        if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
+        if (this.oauthStatus) this.oauthStatus.classList.add('hidden');
+        if (this.chesscomStatus) this.chesscomStatus.classList.add('hidden');
+        if (this.chesscomError) this.chesscomError.classList.add('hidden');
+        
+        if (titleEl) titleEl.textContent = 'Add Account';
+    }
+
+    selectPlatform(platform) {
+        const titleEl = document.getElementById('accountModalTitle');
+        
+        // Hide platform selection step
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.add('hidden');
         
         if (platform === 'lichess') {
             // Show Lichess OAuth step
@@ -311,7 +348,7 @@ class ChessQLApp {
             if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
             if (this.oauthStatus) this.oauthStatus.classList.add('hidden');
             if (titleEl) titleEl.textContent = 'Link Lichess Account';
-        } else {
+        } else if (platform === 'chesscom') {
             // Show Chess.com username input step
             if (this.oauthStep) this.oauthStep.classList.add('hidden');
             if (this.chesscomStep) this.chesscomStep.classList.remove('hidden');
@@ -323,10 +360,6 @@ class ChessQLApp {
             }
             if (titleEl) titleEl.textContent = 'Add Chess.com Account';
         }
-    }
-
-    showChesscomAccountModal() {
-        this.showAccountModal('chesscom');
     }
 
     async submitChesscomAccount() {
@@ -406,6 +439,10 @@ class ChessQLApp {
     hideAccountModal() {
         this.accountModal.classList.add('hidden');
         this.pendingOAuth = null;
+        // Reset to platform selection step
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.remove('hidden');
+        if (this.oauthStep) this.oauthStep.classList.add('hidden');
+        if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
     }
 
     async startOAuthFlow() {
@@ -777,14 +814,18 @@ class ChessQLApp {
                 limit: this.backendPageSize, 
                 page_no: page, 
                 offset: offset,
-                reference_player: selectedAccount  // Pass selected account for context
+                account_id: selectedAccount ? selectedAccount.id : null,
+                reference_player: selectedAccount ? selectedAccount.username : null,  // For "I", "my" context
+                platform: selectedAccount ? selectedAccount.platform : null  // For platform filtering
             }
             : { 
                 query: query, 
                 limit: this.backendPageSize, 
                 page_no: page, 
                 offset: offset,
-                reference_player: selectedAccount  // Pass selected account for filtering
+                account_id: selectedAccount ? selectedAccount.id : null,
+                reference_player: selectedAccount ? selectedAccount.username : null,  // For ChessQL patterns
+                platform: selectedAccount ? selectedAccount.platform : null  // For platform filtering
             };
 
         const response = await ipcRenderer.invoke('api-request', {

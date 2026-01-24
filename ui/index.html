@@ -56,13 +56,9 @@
             <div class="accounts-panel-content">
                 <!-- Add Account Section -->
                 <div class="add-account-section">
-                    <button id="addLichessAccountBtn" class="add-account-btn lichess-btn">
-                        <span class="add-icon">♞</span>
-                        <span>Link Lichess Account</span>
-                    </button>
-                    <button id="addChesscomAccountBtn" class="add-account-btn chesscom-btn">
-                        <span class="add-icon">♟</span>
-                        <span>Add Chess.com Account</span>
+                    <button id="addAccountBtn" class="add-account-btn">
+                        <span class="add-icon">+</span>
+                        <span>Add Account</span>
                     </button>
                 </div>
 
@@ -70,7 +66,7 @@
                 <div id="accountsList" class="accounts-list">
                     <div class="no-accounts">
                         <p>No accounts linked yet.</p>
-                        <p class="hint">Click "Link Lichess Account" to get started.</p>
+                        <p class="hint">Click "Add Account" to get started.</p>
                     </div>
                 </div>
             </div>
@@ -84,8 +80,25 @@
                     <button id="closeAccountModal" class="close-btn">&times;</button>
                 </div>
                 <div class="modal-body account-modal-body">
+                    <!-- Platform Selection Step -->
+                    <div id="platformSelectionStep" class="platform-selection-step">
+                        <p class="platform-selection-description">
+                            Choose a platform to add your account:
+                        </p>
+                        <div class="platform-selection-actions">
+                            <button id="selectLichessBtn" class="platform-select-btn lichess-btn">
+                                <span class="platform-icon">♞</span>
+                                <span class="platform-name">Lichess</span>
+                            </button>
+                            <button id="selectChesscomBtn" class="platform-select-btn chesscom-btn">
+                                <span class="platform-icon">♟</span>
+                                <span class="platform-name">Chess.com</span>
+                            </button>
+                        </div>
+                    </div>
+                    
                     <!-- Lichess OAuth Step -->
-                    <div id="oauthStep" class="oauth-step">
+                    <div id="oauthStep" class="oauth-step hidden">
                         <p class="oauth-description">
                             Connect your Lichess account to sync and analyze your games.
                         </p>

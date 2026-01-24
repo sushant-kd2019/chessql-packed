@@ -153,31 +153,18 @@ body {
     padding: 14px 20px;
     border: none;
     border-radius: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
-.add-account-btn.lichess-btn {
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
-}
-
-.add-account-btn.lichess-btn:hover {
+.add-account-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
-}
-
-.add-account-btn.chesscom-btn {
-    background: linear-gradient(135deg, #7FA650 0%, #6d8f45 100%);
-    box-shadow: 0 4px 15px rgba(127, 166, 80, 0.3);
-}
-
-.add-account-btn.chesscom-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(127, 166, 80, 0.4);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .add-icon {
@@ -427,6 +414,69 @@ body {
 .account-modal-body {
     padding: 30px;
     text-align: center;
+}
+
+.platform-selection-step {
+    text-align: center;
+}
+
+.platform-selection-description {
+    color: #666;
+    font-size: 15px;
+    margin-bottom: 30px;
+    line-height: 1.6;
+}
+
+.platform-selection-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.platform-select-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 24px;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.platform-select-btn.lichess-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+}
+
+.platform-select-btn.lichess-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.platform-select-btn.chesscom-btn {
+    background: linear-gradient(135deg, #7FA650 0%, #6d8f45 100%);
+}
+
+.platform-select-btn.chesscom-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(127, 166, 80, 0.4);
+}
+
+.platform-icon {
+    font-size: 24px;
+    font-weight: 300;
+}
+
+.platform-name {
+    font-size: 16px;
 }
 
 .oauth-description {
