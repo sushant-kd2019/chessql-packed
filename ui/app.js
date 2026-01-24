@@ -306,29 +306,48 @@ class ChessQLApp {
     }
 
     async showChesscomAccountModal() {
-        const username = prompt('Enter your Chess.com username:');
-        if (!username) {
-            return;
-        }
-
-        // Validate username
-        if (username.length < 3 || username.length > 25 || !/^[a-zA-Z0-9_-]+$/.test(username)) {
-            alert('Invalid Chess.com username. Username must be 3-25 characters, alphanumeric with hyphens/underscores.');
-            return;
-        }
-
+        console.log('showChesscomAccountModal called');
         try {
+            const username = prompt('Enter your Chess.com username:');
+            if (!username) {
+                console.log('User cancelled username input');
+                return;
+            }
+
+            // Trim whitespace
+            const trimmedUsername = username.trim();
+            if (!trimmedUsername) {
+                alert('Username cannot be empty.');
+                return;
+            }
+
+            // Validate username
+            if (trimmedUsername.length < 3 || trimmedUsername.length > 25) {
+                alert('Invalid Chess.com username. Username must be 3-25 characters.');
+                return;
+            }
+            
+            if (!/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
+                alert('Invalid Chess.com username. Username can only contain letters, numbers, hyphens, and underscores.');
+                return;
+            }
+
+            console.log('Adding Chess.com account:', trimmedUsername);
+            
             const response = await ipcRenderer.invoke('api-request', {
                 endpoint: '/auth/chesscom/add',
                 method: 'POST',
-                data: { username: username }
+                data: { username: trimmedUsername }
             });
+
+            console.log('API response:', response);
 
             if (response.success) {
                 await this.loadAccounts();
-                alert(`Successfully added Chess.com account: ${username}`);
+                alert(`Successfully added Chess.com account: ${trimmedUsername}`);
             } else {
-                throw new Error(response.error || 'Failed to add account');
+                const errorMsg = response.error || response.data?.error || 'Failed to add account';
+                throw new Error(errorMsg);
             }
         } catch (error) {
             console.error('Add Chess.com account error:', error);
