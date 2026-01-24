@@ -139,6 +139,9 @@ body {
 
 .add-account-section {
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .add-account-btn {
@@ -148,7 +151,6 @@ body {
     justify-content: center;
     gap: 10px;
     padding: 14px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border: none;
     border-radius: 10px;
     color: white;
@@ -156,12 +158,26 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
-.add-account-btn:hover {
+.add-account-btn.lichess-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.add-account-btn.lichess-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.add-account-btn.chesscom-btn {
+    background: linear-gradient(135deg, #7FA650 0%, #6d8f45 100%);
+    box-shadow: 0 4px 15px rgba(127, 166, 80, 0.3);
+}
+
+.add-account-btn.chesscom-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(127, 166, 80, 0.4);
 }
 
 .add-icon {

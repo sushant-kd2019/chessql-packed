@@ -367,6 +367,7 @@ class AccountResponse(BaseModel):
     last_sync_at: Optional[str] = None
     last_game_at: Optional[int] = None
     games_count: int
+    platform: Optional[str] = "lichess"  # Default for backward compatibility
 
 
 @app.post("/auth/lichess/start", response_model=AuthStartResponse)

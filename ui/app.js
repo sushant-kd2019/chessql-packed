@@ -81,7 +81,8 @@ class ChessQLApp {
         this.accountsBadge = document.getElementById('accountsBadge');
         this.accountsPanel = document.getElementById('accountsPanel');
         this.closeAccountsPanel = document.getElementById('closeAccountsPanel');
-        this.addAccountBtn = document.getElementById('addAccountBtn');
+        this.addLichessAccountBtn = document.getElementById('addLichessAccountBtn');
+        this.addChesscomAccountBtn = document.getElementById('addChesscomAccountBtn');
         this.accountsList = document.getElementById('accountsList');
         this.accountModal = document.getElementById('accountModal');
         this.closeAccountModal = document.getElementById('closeAccountModal');
@@ -165,7 +166,8 @@ class ChessQLApp {
         // Account panel events
         this.accountsBtn.addEventListener('click', () => this.toggleAccountsPanel());
         this.closeAccountsPanel.addEventListener('click', () => this.hideAccountsPanel());
-        this.addAccountBtn.addEventListener('click', () => this.showAccountModal());
+        this.addLichessAccountBtn.addEventListener('click', () => this.showAccountModal('lichess'));
+        this.addChesscomAccountBtn.addEventListener('click', () => this.showChesscomAccountModal());
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
         this.closeSyncToast.addEventListener('click', () => this.hideSyncToast());
@@ -279,9 +281,45 @@ class ChessQLApp {
         this.accountsPanel.classList.add('hidden');
     }
 
-    showAccountModal() {
+    showAccountModal(platform = 'lichess') {
         this.accountModal.classList.remove('hidden');
         this.oauthStatus.classList.add('hidden');
+        // Update modal title based on platform
+        const titleEl = document.getElementById('accountModalTitle');
+        if (titleEl) {
+            titleEl.textContent = platform === 'lichess' ? 'Link Lichess Account' : 'Add Chess.com Account';
+        }
+    }
+
+    async showChesscomAccountModal() {
+        const username = prompt('Enter your Chess.com username:');
+        if (!username) {
+            return;
+        }
+
+        // Validate username
+        if (username.length < 3 || username.length > 25 || !/^[a-zA-Z0-9_-]+$/.test(username)) {
+            alert('Invalid Chess.com username. Username must be 3-25 characters, alphanumeric with hyphens/underscores.');
+            return;
+        }
+
+        try {
+            const response = await ipcRenderer.invoke('api-request', {
+                endpoint: '/auth/chesscom/add',
+                method: 'POST',
+                data: { username: username }
+            });
+
+            if (response.success) {
+                await this.loadAccounts();
+                alert(`Successfully added Chess.com account: ${username}`);
+            } else {
+                throw new Error(response.error || 'Failed to add account');
+            }
+        } catch (error) {
+            console.error('Add Chess.com account error:', error);
+            alert('Failed to add Chess.com account: ' + error.message);
+        }
     }
 
     hideAccountModal() {
