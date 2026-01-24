@@ -83,16 +83,17 @@ class ChessQLApp {
         this.closeAccountsPanel = document.getElementById('closeAccountsPanel');
         this.addLichessAccountBtn = document.getElementById('addLichessAccountBtn');
         this.addChesscomAccountBtn = document.getElementById('addChesscomAccountBtn');
-        
-        // Debug: Check if buttons exist
-        if (!this.addChesscomAccountBtn) {
-            console.error('Chess.com account button not found!');
-        }
         this.accountsList = document.getElementById('accountsList');
         this.accountModal = document.getElementById('accountModal');
         this.closeAccountModal = document.getElementById('closeAccountModal');
         this.startOAuthBtn = document.getElementById('startOAuthBtn');
         this.oauthStatus = document.getElementById('oauthStatus');
+        this.oauthStep = document.getElementById('oauthStep');
+        this.chesscomStep = document.getElementById('chesscomStep');
+        this.chesscomUsernameInput = document.getElementById('chesscomUsernameInput');
+        this.chesscomError = document.getElementById('chesscomError');
+        this.chesscomStatus = document.getElementById('chesscomStatus');
+        this.submitChesscomAccountBtn = document.getElementById('submitChesscomAccountBtn');
         
         // Account selector in search
         this.accountSelect = document.getElementById('accountSelect');
@@ -175,15 +176,20 @@ class ChessQLApp {
             this.addLichessAccountBtn.addEventListener('click', () => this.showAccountModal('lichess'));
         }
         if (this.addChesscomAccountBtn) {
-            this.addChesscomAccountBtn.addEventListener('click', () => {
-                console.log('Chess.com button clicked');
-                this.showChesscomAccountModal();
-            });
-        } else {
-            console.error('Cannot attach event listener: Chess.com account button not found');
+            this.addChesscomAccountBtn.addEventListener('click', () => this.showChesscomAccountModal());
         }
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
+        if (this.submitChesscomAccountBtn) {
+            this.submitChesscomAccountBtn.addEventListener('click', () => this.submitChesscomAccount());
+        }
+        if (this.chesscomUsernameInput) {
+            this.chesscomUsernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.submitChesscomAccount();
+                }
+            });
+        }
         this.closeSyncToast.addEventListener('click', () => this.hideSyncToast());
         
         // OpenAI key modal events
@@ -297,61 +303,103 @@ class ChessQLApp {
 
     showAccountModal(platform = 'lichess') {
         this.accountModal.classList.remove('hidden');
-        this.oauthStatus.classList.add('hidden');
-        // Update modal title based on platform
         const titleEl = document.getElementById('accountModalTitle');
-        if (titleEl) {
-            titleEl.textContent = platform === 'lichess' ? 'Link Lichess Account' : 'Add Chess.com Account';
+        
+        if (platform === 'lichess') {
+            // Show Lichess OAuth step
+            if (this.oauthStep) this.oauthStep.classList.remove('hidden');
+            if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
+            if (this.oauthStatus) this.oauthStatus.classList.add('hidden');
+            if (titleEl) titleEl.textContent = 'Link Lichess Account';
+        } else {
+            // Show Chess.com username input step
+            if (this.oauthStep) this.oauthStep.classList.add('hidden');
+            if (this.chesscomStep) this.chesscomStep.classList.remove('hidden');
+            if (this.chesscomStatus) this.chesscomStatus.classList.add('hidden');
+            if (this.chesscomError) this.chesscomError.classList.add('hidden');
+            if (this.chesscomUsernameInput) {
+                this.chesscomUsernameInput.value = '';
+                this.chesscomUsernameInput.focus();
+            }
+            if (titleEl) titleEl.textContent = 'Add Chess.com Account';
         }
     }
 
-    async showChesscomAccountModal() {
-        console.log('showChesscomAccountModal called');
+    showChesscomAccountModal() {
+        this.showAccountModal('chesscom');
+    }
+
+    async submitChesscomAccount() {
+        if (!this.chesscomUsernameInput) {
+            return;
+        }
+
+        // Clear previous errors
+        if (this.chesscomError) {
+            this.chesscomError.classList.add('hidden');
+            this.chesscomError.textContent = '';
+        }
+
+        // Get and validate username
+        const username = this.chesscomUsernameInput.value.trim();
+        
+        if (!username) {
+            this.showChesscomError('Username cannot be empty.');
+            return;
+        }
+
+        // Validate username format
+        if (username.length < 3 || username.length > 25) {
+            this.showChesscomError('Username must be 3-25 characters.');
+            return;
+        }
+        
+        if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+            this.showChesscomError('Username can only contain letters, numbers, hyphens, and underscores.');
+            return;
+        }
+
+        // Show loading state
+        if (this.chesscomStatus) {
+            this.chesscomStatus.classList.remove('hidden');
+        }
+            if (this.submitChesscomAccountBtn) {
+                this.submitChesscomAccountBtn.disabled = true;
+            }
+
         try {
-            const username = prompt('Enter your Chess.com username:');
-            if (!username) {
-                console.log('User cancelled username input');
-                return;
-            }
-
-            // Trim whitespace
-            const trimmedUsername = username.trim();
-            if (!trimmedUsername) {
-                alert('Username cannot be empty.');
-                return;
-            }
-
-            // Validate username
-            if (trimmedUsername.length < 3 || trimmedUsername.length > 25) {
-                alert('Invalid Chess.com username. Username must be 3-25 characters.');
-                return;
-            }
-            
-            if (!/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
-                alert('Invalid Chess.com username. Username can only contain letters, numbers, hyphens, and underscores.');
-                return;
-            }
-
-            console.log('Adding Chess.com account:', trimmedUsername);
-            
             const response = await ipcRenderer.invoke('api-request', {
                 endpoint: '/auth/chesscom/add',
                 method: 'POST',
-                data: { username: trimmedUsername }
+                data: { username: username }
             });
-
-            console.log('API response:', response);
 
             if (response.success) {
                 await this.loadAccounts();
-                alert(`Successfully added Chess.com account: ${trimmedUsername}`);
+                this.hideAccountModal();
+                // Show success message (you can replace with a toast if you have one)
+                alert(`Successfully added Chess.com account: ${username}`);
             } else {
                 const errorMsg = response.error || response.data?.error || 'Failed to add account';
-                throw new Error(errorMsg);
+                this.showChesscomError(errorMsg);
             }
         } catch (error) {
             console.error('Add Chess.com account error:', error);
-            alert('Failed to add Chess.com account: ' + error.message);
+            this.showChesscomError('Failed to add account: ' + error.message);
+        } finally {
+            if (this.chesscomStatus) {
+                this.chesscomStatus.classList.add('hidden');
+            }
+            if (this.submitChesscomAccountBtn) {
+                this.submitChesscomAccountBtn.disabled = false;
+            }
+        }
+    }
+
+    showChesscomError(message) {
+        if (this.chesscomError) {
+            this.chesscomError.textContent = message;
+            this.chesscomError.classList.remove('hidden');
         }
     }
 

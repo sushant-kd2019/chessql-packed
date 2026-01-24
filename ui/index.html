@@ -76,7 +76,7 @@
             </div>
         </div>
 
-        <!-- Account Modal (for OAuth flow) -->
+        <!-- Account Modal (for OAuth flow and Chess.com) -->
         <div id="accountModal" class="modal hidden">
             <div class="modal-content account-modal-content">
                 <div class="modal-header">
@@ -84,6 +84,7 @@
                     <button id="closeAccountModal" class="close-btn">&times;</button>
                 </div>
                 <div class="modal-body account-modal-body">
+                    <!-- Lichess OAuth Step -->
                     <div id="oauthStep" class="oauth-step">
                         <p class="oauth-description">
                             Connect your Lichess account to sync and analyze your games.
@@ -97,6 +98,28 @@
                         <div id="oauthStatus" class="oauth-status hidden">
                             <div class="spinner"></div>
                             <span>Waiting for authorization...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Chess.com Username Input Step -->
+                    <div id="chesscomStep" class="chesscom-step hidden">
+                        <p class="chesscom-description">
+                            Enter your Chess.com username to add your account.
+                        </p>
+                        <div class="chesscom-input-group">
+                            <label for="chesscomUsernameInput">Chess.com Username</label>
+                            <input type="text" id="chesscomUsernameInput" placeholder="Enter username" class="chesscom-username-input" />
+                            <div id="chesscomError" class="chesscom-error hidden"></div>
+                        </div>
+                        <div class="chesscom-actions">
+                            <button id="submitChesscomAccountBtn" class="chesscom-submit-btn">
+                                <span class="chesscom-logo">♟</span>
+                                Add Account
+                            </button>
+                        </div>
+                        <div id="chesscomStatus" class="chesscom-status hidden">
+                            <div class="spinner"></div>
+                            <span>Adding account...</span>
                         </div>
                     </div>
                 </div>
