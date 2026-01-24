@@ -83,6 +83,11 @@ class ChessQLApp {
         this.closeAccountsPanel = document.getElementById('closeAccountsPanel');
         this.addLichessAccountBtn = document.getElementById('addLichessAccountBtn');
         this.addChesscomAccountBtn = document.getElementById('addChesscomAccountBtn');
+        
+        // Debug: Check if buttons exist
+        if (!this.addChesscomAccountBtn) {
+            console.error('Chess.com account button not found!');
+        }
         this.accountsList = document.getElementById('accountsList');
         this.accountModal = document.getElementById('accountModal');
         this.closeAccountModal = document.getElementById('closeAccountModal');
@@ -166,8 +171,17 @@ class ChessQLApp {
         // Account panel events
         this.accountsBtn.addEventListener('click', () => this.toggleAccountsPanel());
         this.closeAccountsPanel.addEventListener('click', () => this.hideAccountsPanel());
-        this.addLichessAccountBtn.addEventListener('click', () => this.showAccountModal('lichess'));
-        this.addChesscomAccountBtn.addEventListener('click', () => this.showChesscomAccountModal());
+        if (this.addLichessAccountBtn) {
+            this.addLichessAccountBtn.addEventListener('click', () => this.showAccountModal('lichess'));
+        }
+        if (this.addChesscomAccountBtn) {
+            this.addChesscomAccountBtn.addEventListener('click', () => {
+                console.log('Chess.com button clicked');
+                this.showChesscomAccountModal();
+            });
+        } else {
+            console.error('Cannot attach event listener: Chess.com account button not found');
+        }
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
         this.closeSyncToast.addEventListener('click', () => this.hideSyncToast());
