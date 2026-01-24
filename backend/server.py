@@ -17,6 +17,7 @@ from openai import OpenAI
 from accounts import AccountManager
 from lichess_auth import LichessAuth, LichessAuthError, verify_token, revoke_token, add_token_manually
 from lichess_sync import get_sync_manager, LichessGame, SyncStatus, LichessSyncError
+from chesscom_sync import get_sync_manager as get_chesscom_sync_manager, ChessComGame, SyncStatus as ChessComSyncStatus, ChessComSyncError
 from database import ChessDatabase
 
 app = FastAPI(
@@ -583,7 +584,7 @@ async def add_manual_token(request: ManualTokenRequest):
 @app.get("/auth/accounts", response_model=List[AccountResponse])
 async def list_accounts():
     """
-    List all linked Lichess accounts.
+    List all linked accounts (Lichess and Chess.com).
     
     Note: Access tokens are not included in the response for security.
     """
@@ -597,9 +598,9 @@ async def list_accounts():
 @app.delete("/auth/accounts/{username}")
 async def remove_account(username: str):
     """
-    Remove a linked Lichess account.
+    Remove a linked account (Lichess or Chess.com).
     
-    This will also revoke the access token on Lichess.
+    For Lichess accounts, this will also revoke the access token on Lichess.
     """
     if account_manager is None:
         raise HTTPException(status_code=500, detail="Account manager not initialized")
@@ -610,8 +611,8 @@ async def remove_account(username: str):
     if not account:
         raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
     
-    # Try to revoke the token on Lichess (best effort)
-    if account.get('access_token'):
+    # Try to revoke the token on Lichess (only for Lichess accounts)
+    if account.get('platform') == 'lichess' and account.get('access_token'):
         await revoke_token(account['access_token'])
     
     # Remove from local database
@@ -862,9 +863,268 @@ async def get_sync_status(username: str):
 @app.post("/sync/stop/{username}")
 async def stop_sync(username: str):
     """
-    Cancel an ongoing sync operation.
+    Cancel an ongoing sync operation (Lichess).
     """
     sync_manager = get_sync_manager()
+    
+    if not sync_manager.is_syncing(username.lower()):
+        raise HTTPException(status_code=404, detail="No sync in progress")
+    
+    sync_manager.cancel_sync(username.lower())
+    
+    return {"success": True, "message": f"Sync cancellation requested for '{username}'"}
+
+
+# ============================================================================
+# Chess.com Account & Sync Endpoints
+# ============================================================================
+
+class ChessComAddRequest(BaseModel):
+    """Request for adding a Chess.com account."""
+    username: str
+
+
+@app.post("/auth/chesscom/add", response_model=AuthCallbackResponse)
+async def add_chesscom_account(request: ChessComAddRequest):
+    """
+    Add a Chess.com account by username.
+    
+    Chess.com doesn't require authentication, so we just need the username.
+    """
+    if account_manager is None:
+        raise HTTPException(status_code=500, detail="Account manager not initialized")
+    
+    # Validate username
+    if not AccountManager.validate_chesscom_username(request.username):
+        return AuthCallbackResponse(
+            success=False,
+            error="Invalid Chess.com username. Username must be 3-25 characters, alphanumeric with hyphens/underscores."
+        )
+    
+    # Check if account already exists
+    existing = account_manager.get_account(request.username)
+    if existing:
+        return AuthCallbackResponse(
+            success=False,
+            error=f"Account '{request.username}' already exists"
+        )
+    
+    # Add account (Chess.com doesn't need access token)
+    try:
+        account_manager.add_account(
+            username=request.username,
+            access_token="",  # Chess.com doesn't require tokens
+            token_expires_at=None,
+            platform="chesscom"
+        )
+        return AuthCallbackResponse(success=True, username=request.username)
+    except Exception as e:
+        return AuthCallbackResponse(
+            success=False,
+            error=f"Failed to add account: {str(e)}"
+        )
+
+
+async def _run_chesscom_sync_task(username: str, account_id: int, since: Optional[int], max_games: Optional[int]):
+    """Background task to sync Chess.com games."""
+    import asyncio
+    from datetime import datetime
+    from piece_analysis import ChessPieceAnalyzer
+    
+    sync_manager = get_chesscom_sync_manager()
+    progress = sync_manager.get_progress(username.lower())
+    
+    # Initialize piece analyzer for capture analysis
+    piece_analyzer = ChessPieceAnalyzer(reference_player=username)
+    
+    new_games_count = 0
+    skipped_count = 0
+    latest_game_ts = since
+    
+    try:
+        # Convert since from milliseconds to seconds if provided (Chess.com uses seconds)
+        since_seconds = None
+        if since:
+            since_seconds = since // 1000  # Convert milliseconds to seconds
+        
+        async for game in sync_manager.stream_games(
+            username=username,
+            since=since_seconds,
+            max_games=max_games,
+        ):
+            # Check for cancellation
+            if sync_manager._cancel_flags.get(username.lower(), False):
+                progress.status = ChessComSyncStatus.CANCELLED
+                break
+            
+            # Convert to database format
+            game_data = game.to_pgn_dict()
+            
+            # Check if game already exists
+            if chess_db.game_exists(chesscom_id=game.id):
+                skipped_count += 1
+                progress.skipped_games = skipped_count
+            else:
+                # Insert game
+                try:
+                    game_id = chess_db.insert_game(game_data, account_id=account_id)
+                    
+                    # Analyze captures
+                    if game.moves:
+                        captures = piece_analyzer.analyze_captures(
+                            game.moves,
+                            game.white_player,
+                            game.black_player,
+                            username
+                        )
+                        if captures:
+                            chess_db.insert_captures(game_id, captures)
+                    
+                    new_games_count += 1
+                    progress.new_games = new_games_count
+                except Exception as e:
+                    # Skip games that fail to insert (e.g., duplicates)
+                    skipped_count += 1
+                    progress.skipped_games = skipped_count
+            
+            progress.synced_games += 1
+            
+            # Track latest game timestamp for incremental sync (convert to milliseconds)
+            if game.end_time and (latest_game_ts is None or (game.end_time * 1000) > latest_game_ts):
+                latest_game_ts = game.end_time * 1000  # Convert seconds to milliseconds
+        
+        if progress.status != ChessComSyncStatus.CANCELLED:
+            progress.status = ChessComSyncStatus.COMPLETED
+        
+        # Update account sync status
+        if account_manager and latest_game_ts:
+            account_manager.update_sync_status(
+                username=username,
+                last_sync_at=datetime.now(),
+                last_game_at=latest_game_ts,
+                games_count=chess_db.get_games_count_by_account(account_id)
+            )
+        
+    except ChessComSyncError as e:
+        progress.status = ChessComSyncStatus.ERROR
+        progress.error_message = str(e)
+    except Exception as e:
+        progress.status = ChessComSyncStatus.ERROR
+        progress.error_message = f"Unexpected error: {str(e)}"
+    
+    progress.completed_at = datetime.now()
+    
+    # Clean up task reference
+    if username.lower() in _sync_tasks:
+        del _sync_tasks[username.lower()]
+
+
+@app.post("/sync/chesscom/start/{username}", response_model=SyncProgressResponse)
+async def start_chesscom_sync(username: str, request: SyncStartRequest = None):
+    """
+    Start syncing games for a Chess.com account.
+    
+    This initiates a background sync that downloads all games for the account.
+    Use GET /sync/chesscom/status/{username} to check progress.
+    
+    For incremental sync, the system automatically uses the last sync timestamp.
+    For full sync (full_sync=True), all existing games are deleted first.
+    """
+    import asyncio
+    from datetime import datetime
+    
+    if account_manager is None or chess_db is None:
+        raise HTTPException(status_code=500, detail="Server not initialized")
+    
+    # Get account
+    account = account_manager.get_account(username)
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account '{username}' not found")
+    
+    # Verify it's a Chess.com account
+    if account.get('platform') != 'chesscom':
+        raise HTTPException(status_code=400, detail=f"Account '{username}' is not a Chess.com account")
+    
+    # Check if sync already in progress
+    sync_manager = get_chesscom_sync_manager()
+    if sync_manager.is_syncing(username.lower()):
+        raise HTTPException(status_code=409, detail="Sync already in progress")
+    
+    # Handle full sync - delete all existing games first
+    full_sync = request.full_sync if request else False
+    if full_sync:
+        # Delete all games for this account
+        deleted_count = chess_db.delete_games_by_account(account['id'])
+        print(f"Full sync: Deleted {deleted_count} games for account '{username}'")
+        
+        # Reset account sync status
+        account_manager.reset_sync_status(username)
+        
+        # Start from the beginning
+        since = None
+    else:
+        # Get last sync timestamp for incremental sync
+        since = account.get('last_game_at')
+        if since:
+            # Convert from milliseconds to seconds for Chess.com API
+            since = (since // 1000) + 1  # Start from the next second
+    
+    # Initialize progress
+    progress = sync_manager._sync_progress[username.lower()] = sync_manager.get_progress(username.lower())
+    progress.status = ChessComSyncStatus.SYNCING
+    progress.started_at = datetime.now()
+    progress.synced_games = 0
+    progress.new_games = 0
+    progress.skipped_games = 0
+    progress.error_message = None
+    progress.completed_at = None
+    sync_manager._cancel_flags[username.lower()] = False
+    
+    # Start background task
+    max_games = request.max_games if request else None
+    task = asyncio.create_task(_run_chesscom_sync_task(
+        username=username,
+        account_id=account['id'],
+        since=since * 1000 if since else None,  # Convert back to milliseconds for internal use
+        max_games=max_games
+    ))
+    _sync_tasks[username.lower()] = task
+    
+    return SyncProgressResponse(
+        status=progress.status.value,
+        synced_games=0,
+        new_games=0,
+        skipped_games=0,
+        started_at=progress.started_at.isoformat() if progress.started_at else None
+    )
+
+
+@app.get("/sync/chesscom/status/{username}", response_model=SyncProgressResponse)
+async def get_chesscom_sync_status(username: str):
+    """
+    Get the current sync progress for a Chess.com account.
+    """
+    sync_manager = get_chesscom_sync_manager()
+    progress = sync_manager.get_progress(username.lower())
+    
+    return SyncProgressResponse(
+        status=progress.status.value,
+        total_games=progress.total_games,
+        synced_games=progress.synced_games,
+        new_games=progress.new_games,
+        skipped_games=progress.skipped_games,
+        error_message=progress.error_message,
+        started_at=progress.started_at.isoformat() if progress.started_at else None,
+        completed_at=progress.completed_at.isoformat() if progress.completed_at else None
+    )
+
+
+@app.post("/sync/chesscom/stop/{username}")
+async def stop_chesscom_sync(username: str):
+    """
+    Cancel an ongoing Chess.com sync operation.
+    """
+    sync_manager = get_chesscom_sync_manager()
     
     if not sync_manager.is_syncing(username.lower()):
         raise HTTPException(status_code=404, detail="No sync in progress")
