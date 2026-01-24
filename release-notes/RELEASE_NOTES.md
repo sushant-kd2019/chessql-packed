@@ -1,3 +1,156 @@
+# ChessQL v0.0.3 — Multi-Platform Support & Enhanced Filtering 🎉
+
+**Release Date:** January 15, 2026
+
+This major release adds Chess.com integration, multi-platform account support, and enhanced query filtering capabilities.
+
+---
+
+## ✨ Major Features
+
+### 🎮 Chess.com Integration
+- **Full Chess.com Support** — Import and analyze games from Chess.com alongside Lichess
+- **Chess.com Published-Data API** — Seamless integration with Chess.com's public API
+- **Monthly Archive Sync** — Efficiently sync games by iterating through monthly archives
+- **Platform-Specific Game IDs** — Proper handling of Chess.com game identifiers
+
+### 🔄 Multi-Platform Account Management
+- **Same Username Support** — Link accounts with the same username across different platforms (e.g., "lecorvus" on both Lichess and Chess.com)
+- **Platform Differentiation** — Visual indicators (♞ for Lichess, ♟ for Chess.com) on accounts and games
+- **Unified Account UI** — Single "Add Account" button with platform selection modal
+- **Platform-Specific Filtering** — Queries automatically filter by selected account's platform
+
+### 🔍 Enhanced Query Filtering
+- **Account ID Filtering** — Queries now filter by specific account ID, ensuring accurate results for multi-platform accounts
+- **Platform-Aware Natural Language Search** — Natural language queries automatically understand platform context
+- **Improved Query Execution** — Better handling of account and platform filters in both CQL and natural language queries
+
+---
+
+## 🎨 UI Improvements
+
+### Streamlined Account Management
+- **Single Add Account Button** — Replaced separate Lichess/Chess.com buttons with unified interface
+- **Platform Selection Modal** — Choose platform (Lichess or Chess.com) before adding account
+- **Better Visual Hierarchy** — Cleaner, more intuitive account management flow
+
+### Platform Indicators
+- **Account Cards** — Platform badges displayed next to usernames
+- **Game Cards** — Platform overlay badges on game thumbnails
+- **Account Selector** — Platform icons in dropdown menu for easy identification
+
+---
+
+## 🐛 Bug Fixes
+
+### Account Filtering
+- **Fixed:** Queries now correctly filter by account ID instead of just username
+- **Fixed:** Multi-platform accounts with same username now work correctly
+- **Fixed:** Platform filtering properly applied in both CQL and natural language queries
+
+### UI/UX
+- **Fixed:** Replaced unsupported `prompt()` function with proper modal for Chess.com account addition
+- **Fixed:** Account modal now properly resets to platform selection after closing
+- **Fixed:** Better error handling and validation for Chess.com username input
+
+---
+
+## 🔧 Technical Improvements
+
+### Backend
+- **Database Schema Updates** — Added `platform` column to accounts table and `chesscom_id` to games table
+- **Unique Constraints** — Changed from username-only to (username, platform) unique constraint
+- **Query Language Enhancements** — Added `account_id` and `platform` filtering support
+- **Natural Language Search** — Enhanced to understand and apply platform context
+
+### API Changes
+- **New Endpoints:**
+  - `POST /auth/chesscom/add` — Add Chess.com account
+  - `POST /sync/chesscom/start/{username}` — Start Chess.com sync
+  - `GET /sync/chesscom/status/{username}` — Check sync status
+  - `POST /sync/chesscom/stop/{username}` — Stop sync
+- **Updated Endpoints:**
+  - `POST /cql` — Now accepts `account_id` and `platform` parameters
+  - `POST /ask` — Now accepts `account_id` and `platform` parameters
+
+---
+
+## 📦 Database Migration
+
+The database schema has been automatically migrated to support multi-platform accounts:
+- `accounts` table: Added `platform` column (default: 'lichess')
+- `games` table: Added `chesscom_id` column for Chess.com game identifiers
+- Unique index: Changed from `username` to `(username, platform)`
+
+**Note:** Existing accounts will default to 'lichess' platform. No manual migration required.
+
+---
+
+## 🚀 Getting Started with Chess.com
+
+1. **Add Chess.com Account:**
+   - Click "Add Account" in the Accounts panel
+   - Select "Chess.com" from the platform selection
+   - Enter your Chess.com username
+   - Click "Add Account"
+
+2. **Sync Games:**
+   - Select your Chess.com account from the dropdown
+   - Click "Sync Games" to import your Chess.com games
+
+3. **Query Games:**
+   - Use natural language: "Show me my Chess.com wins"
+   - Or use CQL with account filtering
+
+---
+
+## 📝 Example Queries
+
+### Multi-Platform Queries
+```
+# Show all games from Lichess account
+"Show me my Lichess games"
+
+# Show all games from Chess.com account  
+"Show me my Chess.com wins"
+
+# Filter by specific account
+Select account → Query runs automatically filtered to that account
+```
+
+---
+
+## ⚠️ Breaking Changes
+
+- **Account Selection:** The account selector now uses account IDs internally. Existing code relying on username-only filtering may need updates.
+- **API Requests:** New optional parameters `account_id` and `platform` added to query endpoints.
+
+---
+
+## 📦 Installation
+
+### macOS (Apple Silicon)
+1. Download `ChessQL-0.0.3-arm64.dmg`
+2. Open the DMG and drag **ChessQL** to your Applications folder
+3. **First launch:** Right-click the app → Open → Open (required once to bypass Gatekeeper)
+
+---
+
+## 📁 Upgrade Notes
+
+- This is a drop-in replacement for v0.0.2
+- Your existing database will be automatically migrated
+- All existing Lichess accounts and games will be preserved
+- Simply replace the old app with the new version
+
+---
+
+**Full Changelog:** [v0.0.2...v0.0.3](https://github.com/your-repo/chessql/compare/v0.0.2...v0.0.3)
+
+---
+
+---
+
 # ChessQL v1.0.1 — Bug Fixes 🔧
 
 **Release Date:** January 14, 2026

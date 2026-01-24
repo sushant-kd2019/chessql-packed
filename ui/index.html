@@ -50,7 +50,7 @@
         <!-- Accounts Panel (Sidebar) -->
         <div id="accountsPanel" class="accounts-panel hidden">
             <div class="accounts-panel-header">
-                <h2>Lichess Accounts</h2>
+                <h2>Accounts</h2>
                 <button id="closeAccountsPanel" class="close-btn">&times;</button>
             </div>
             <div class="accounts-panel-content">
@@ -58,7 +58,7 @@
                 <div class="add-account-section">
                     <button id="addAccountBtn" class="add-account-btn">
                         <span class="add-icon">+</span>
-                        <span>Link Lichess Account</span>
+                        <span>Add Account</span>
                     </button>
                 </div>
 
@@ -66,13 +66,13 @@
                 <div id="accountsList" class="accounts-list">
                     <div class="no-accounts">
                         <p>No accounts linked yet.</p>
-                        <p class="hint">Click "Link Lichess Account" to get started.</p>
+                        <p class="hint">Click "Add Account" to get started.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Account Modal (for OAuth flow) -->
+        <!-- Account Modal (for OAuth flow and Chess.com) -->
         <div id="accountModal" class="modal hidden">
             <div class="modal-content account-modal-content">
                 <div class="modal-header">
@@ -80,7 +80,25 @@
                     <button id="closeAccountModal" class="close-btn">&times;</button>
                 </div>
                 <div class="modal-body account-modal-body">
-                    <div id="oauthStep" class="oauth-step">
+                    <!-- Platform Selection Step -->
+                    <div id="platformSelectionStep" class="platform-selection-step">
+                        <p class="platform-selection-description">
+                            Choose a platform to add your account:
+                        </p>
+                        <div class="platform-selection-actions">
+                            <button id="selectLichessBtn" class="platform-select-btn lichess-btn">
+                                <span class="platform-icon">♞</span>
+                                <span class="platform-name">Lichess</span>
+                            </button>
+                            <button id="selectChesscomBtn" class="platform-select-btn chesscom-btn">
+                                <span class="platform-icon">♟</span>
+                                <span class="platform-name">Chess.com</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Lichess OAuth Step -->
+                    <div id="oauthStep" class="oauth-step hidden">
                         <p class="oauth-description">
                             Connect your Lichess account to sync and analyze your games.
                         </p>
@@ -93,6 +111,28 @@
                         <div id="oauthStatus" class="oauth-status hidden">
                             <div class="spinner"></div>
                             <span>Waiting for authorization...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Chess.com Username Input Step -->
+                    <div id="chesscomStep" class="chesscom-step hidden">
+                        <p class="chesscom-description">
+                            Enter your Chess.com username to add your account.
+                        </p>
+                        <div class="chesscom-input-group">
+                            <label for="chesscomUsernameInput">Chess.com Username</label>
+                            <input type="text" id="chesscomUsernameInput" placeholder="Enter username" class="chesscom-username-input" />
+                            <div id="chesscomError" class="chesscom-error hidden"></div>
+                        </div>
+                        <div class="chesscom-actions">
+                            <button id="submitChesscomAccountBtn" class="chesscom-submit-btn">
+                                <span class="chesscom-logo">♟</span>
+                                Add Account
+                            </button>
+                        </div>
+                        <div id="chesscomStatus" class="chesscom-status hidden">
+                            <div class="spinner"></div>
+                            <span>Adding account...</span>
                         </div>
                     </div>
                 </div>

@@ -1,15 +1,16 @@
 """
 Account Management Module
-Handles storing and retrieving Lichess account information.
+Handles storing and retrieving account information for multiple platforms (Lichess, Chess.com).
 """
 
 import sqlite3
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import re
 
 
 class AccountManager:
-    """Manages Lichess accounts in the SQLite database."""
+    """Manages accounts in the SQLite database for multiple platforms."""
     
     def __init__(self, db_path: str = "chess_games.db"):
         """Initialize the account manager with database connection."""
@@ -24,29 +25,78 @@ class AccountManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS accounts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
+                    username TEXT NOT NULL,
                     access_token TEXT NOT NULL,
                     token_expires_at INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_sync_at TIMESTAMP,
                     last_game_at INTEGER,
-                    games_count INTEGER DEFAULT 0
+                    games_count INTEGER DEFAULT 0,
+                    platform TEXT DEFAULT 'lichess',
+                    UNIQUE(username, platform)
                 )
             """)
             
+            # Migration: Add platform column if it doesn't exist (for existing databases)
+            cursor.execute("PRAGMA table_info(accounts)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'platform' not in columns:
+                cursor.execute("ALTER TABLE accounts ADD COLUMN platform TEXT DEFAULT 'lichess'")
+            
+            # Migration: Update unique constraint from username-only to (username, platform)
+            # First, check if the old unique index exists and drop it
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='sqlite_autoindex_accounts_1'")
+            if cursor.fetchone():
+                # The old unique constraint exists, we need to recreate the table
+                # But first, let's check if there are any duplicate usernames with different platforms
+                cursor.execute("""
+                    SELECT username, COUNT(*) as cnt 
+                    FROM accounts 
+                    GROUP BY username 
+                    HAVING cnt > 1
+                """)
+                duplicates = cursor.fetchall()
+                if duplicates:
+                    # There are duplicates, we can't automatically migrate
+                    print("Warning: Found duplicate usernames. Manual migration may be needed.")
+                else:
+                    # Safe to recreate table with new constraint
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS accounts_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username TEXT NOT NULL,
+                            access_token TEXT NOT NULL,
+                            token_expires_at INTEGER,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            last_sync_at TIMESTAMP,
+                            last_game_at INTEGER,
+                            games_count INTEGER DEFAULT 0,
+                            platform TEXT DEFAULT 'lichess',
+                            UNIQUE(username, platform)
+                        )
+                    """)
+                    cursor.execute("""
+                        INSERT INTO accounts_new 
+                        SELECT * FROM accounts
+                    """)
+                    cursor.execute("DROP TABLE accounts")
+                    cursor.execute("ALTER TABLE accounts_new RENAME TO accounts")
+            
             # Create index for faster lookups
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform)")
             
             conn.commit()
     
-    def add_account(self, username: str, access_token: str, token_expires_at: Optional[int] = None) -> int:
+    def add_account(self, username: str, access_token: str, token_expires_at: Optional[int] = None, platform: str = "lichess") -> int:
         """
-        Add a new Lichess account or update if exists.
+        Add a new account or update if exists.
         
         Args:
-            username: Lichess username
-            access_token: OAuth2 access token
+            username: Platform username
+            access_token: OAuth2 access token (for Lichess) or empty string (for Chess.com)
             token_expires_at: Unix timestamp when token expires (None = never)
+            platform: Platform name ('lichess' or 'chesscom')
         
         Returns:
             Account ID
@@ -54,14 +104,18 @@ class AccountManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            # Validate platform
+            if platform not in ["lichess", "chesscom"]:
+                raise ValueError(f"Invalid platform: {platform}. Must be 'lichess' or 'chesscom'")
+            
             # Try to insert, update if exists
             cursor.execute("""
-                INSERT INTO accounts (username, access_token, token_expires_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET
+                INSERT INTO accounts (username, access_token, token_expires_at, platform)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(username, platform) DO UPDATE SET
                     access_token = excluded.access_token,
                     token_expires_at = excluded.token_expires_at
-            """, (username.lower(), access_token, token_expires_at))
+            """, (username.lower(), access_token, token_expires_at, platform))
             
             # Get the account ID
             cursor.execute("SELECT id FROM accounts WHERE username = ?", (username.lower(),))
@@ -70,13 +124,27 @@ class AccountManager:
             conn.commit()
             return account_id
     
-    def get_account(self, username: str) -> Optional[Dict[str, Any]]:
-        """Get account by username."""
+    def get_account(self, username: str, platform: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get account by username and optionally platform.
+        
+        Args:
+            username: Account username
+            platform: Platform name ('lichess' or 'chesscom'). If None, returns first match.
+        
+        Returns:
+            Account dict or None if not found
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            cursor.execute("SELECT * FROM accounts WHERE username = ?", (username.lower(),))
+            if platform:
+                cursor.execute("SELECT * FROM accounts WHERE username = ? AND platform = ?", 
+                             (username.lower(), platform))
+            else:
+                cursor.execute("SELECT * FROM accounts WHERE username = ?", (username.lower(),))
+            
             row = cursor.fetchone()
             
             if row:
@@ -104,7 +172,7 @@ class AccountManager:
             
             cursor.execute("""
                 SELECT id, username, token_expires_at, created_at, 
-                       last_sync_at, last_game_at, games_count
+                       last_sync_at, last_game_at, games_count, platform
                 FROM accounts
                 ORDER BY created_at DESC
             """)
@@ -112,12 +180,26 @@ class AccountManager:
             
             return [dict(row) for row in rows]
     
-    def remove_account(self, username: str) -> bool:
-        """Remove an account by username."""
+    def remove_account(self, username: str, platform: Optional[str] = None) -> bool:
+        """
+        Remove an account by username and optionally platform.
+        
+        Args:
+            username: Account username
+            platform: Platform name ('lichess' or 'chesscom'). If None, removes first match.
+        
+        Returns:
+            True if account was deleted, False otherwise
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            cursor.execute("DELETE FROM accounts WHERE username = ?", (username.lower(),))
+            if platform:
+                cursor.execute("DELETE FROM accounts WHERE username = ? AND platform = ?", 
+                             (username.lower(), platform))
+            else:
+                cursor.execute("DELETE FROM accounts WHERE username = ?", (username.lower(),))
+            
             deleted = cursor.rowcount > 0
             
             conn.commit()
@@ -199,4 +281,33 @@ class AccountManager:
         
         account = self.get_account(username)
         return account['access_token'] if account else None
+    
+    @staticmethod
+    def validate_chesscom_username(username: str) -> bool:
+        """
+        Validate Chess.com username format.
+        
+        Chess.com usernames:
+        - 3-25 characters
+        - Alphanumeric, hyphens, underscores
+        - Case insensitive
+        
+        Args:
+            username: Username to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        if not username:
+            return False
+        
+        # Check length
+        if len(username) < 3 or len(username) > 25:
+            return False
+        
+        # Check characters (alphanumeric, hyphens, underscores)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', username):
+            return False
+        
+        return True
 

@@ -82,11 +82,20 @@ class ChessQLApp {
         this.accountsPanel = document.getElementById('accountsPanel');
         this.closeAccountsPanel = document.getElementById('closeAccountsPanel');
         this.addAccountBtn = document.getElementById('addAccountBtn');
+        this.platformSelectionStep = document.getElementById('platformSelectionStep');
+        this.selectLichessBtn = document.getElementById('selectLichessBtn');
+        this.selectChesscomBtn = document.getElementById('selectChesscomBtn');
         this.accountsList = document.getElementById('accountsList');
         this.accountModal = document.getElementById('accountModal');
         this.closeAccountModal = document.getElementById('closeAccountModal');
         this.startOAuthBtn = document.getElementById('startOAuthBtn');
         this.oauthStatus = document.getElementById('oauthStatus');
+        this.oauthStep = document.getElementById('oauthStep');
+        this.chesscomStep = document.getElementById('chesscomStep');
+        this.chesscomUsernameInput = document.getElementById('chesscomUsernameInput');
+        this.chesscomError = document.getElementById('chesscomError');
+        this.chesscomStatus = document.getElementById('chesscomStatus');
+        this.submitChesscomAccountBtn = document.getElementById('submitChesscomAccountBtn');
         
         // Account selector in search
         this.accountSelect = document.getElementById('accountSelect');
@@ -165,9 +174,27 @@ class ChessQLApp {
         // Account panel events
         this.accountsBtn.addEventListener('click', () => this.toggleAccountsPanel());
         this.closeAccountsPanel.addEventListener('click', () => this.hideAccountsPanel());
-        this.addAccountBtn.addEventListener('click', () => this.showAccountModal());
+        if (this.addAccountBtn) {
+            this.addAccountBtn.addEventListener('click', () => this.showAccountModal());
+        }
+        if (this.selectLichessBtn) {
+            this.selectLichessBtn.addEventListener('click', () => this.selectPlatform('lichess'));
+        }
+        if (this.selectChesscomBtn) {
+            this.selectChesscomBtn.addEventListener('click', () => this.selectPlatform('chesscom'));
+        }
         this.closeAccountModal.addEventListener('click', () => this.hideAccountModal());
         this.startOAuthBtn.addEventListener('click', () => this.startOAuthFlow());
+        if (this.submitChesscomAccountBtn) {
+            this.submitChesscomAccountBtn.addEventListener('click', () => this.submitChesscomAccount());
+        }
+        if (this.chesscomUsernameInput) {
+            this.chesscomUsernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.submitChesscomAccount();
+                }
+            });
+        }
         this.closeSyncToast.addEventListener('click', () => this.hideSyncToast());
         
         // OpenAI key modal events
@@ -228,25 +255,43 @@ class ChessQLApp {
         // Clear existing options except "All accounts"
         this.accountSelect.innerHTML = '<option value="">All accounts</option>';
         
-        // Add account options
+        // Add account options with platform indicator
         this.accounts.forEach(account => {
             const option = document.createElement('option');
-            option.value = account.username;
-            option.textContent = account.username;
+            // Store account_id as value for proper filtering
+            option.value = account.id.toString();
+            const platform = account.platform || 'lichess';
+            const platformInfo = this.getPlatformInfo(platform);
+            option.textContent = `${account.username} ${platformInfo.icon}`;
+            option.dataset.platform = platform;
+            option.dataset.username = account.username;
             this.accountSelect.appendChild(option);
         });
         
         // Restore selection if still valid
-        if (currentValue && this.accounts.some(a => a.username === currentValue)) {
-            this.accountSelect.value = currentValue;
+        if (currentValue) {
+            const matchingAccount = this.accounts.find(a => a.id.toString() === currentValue);
+            if (matchingAccount) {
+                this.accountSelect.value = currentValue;
+            }
         } else if (this.accounts.length === 1) {
             // Auto-select if only one account
-            this.accountSelect.value = this.accounts[0].username;
+            this.accountSelect.value = this.accounts[0].id.toString();
         }
     }
 
     getSelectedAccount() {
-        return this.accountSelect.value || null;
+        const selectedValue = this.accountSelect.value;
+        if (!selectedValue) {
+            return null;
+        }
+        // Return account object with id, username, and platform
+        const account = this.accounts.find(a => a.id.toString() === selectedValue);
+        return account ? {
+            id: account.id,
+            username: account.username,
+            platform: account.platform || 'lichess'
+        } : null;
     }
 
 
@@ -278,12 +323,126 @@ class ChessQLApp {
 
     showAccountModal() {
         this.accountModal.classList.remove('hidden');
-        this.oauthStatus.classList.add('hidden');
+        const titleEl = document.getElementById('accountModalTitle');
+        
+        // Show platform selection step, hide others
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.remove('hidden');
+        if (this.oauthStep) this.oauthStep.classList.add('hidden');
+        if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
+        if (this.oauthStatus) this.oauthStatus.classList.add('hidden');
+        if (this.chesscomStatus) this.chesscomStatus.classList.add('hidden');
+        if (this.chesscomError) this.chesscomError.classList.add('hidden');
+        
+        if (titleEl) titleEl.textContent = 'Add Account';
+    }
+
+    selectPlatform(platform) {
+        const titleEl = document.getElementById('accountModalTitle');
+        
+        // Hide platform selection step
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.add('hidden');
+        
+        if (platform === 'lichess') {
+            // Show Lichess OAuth step
+            if (this.oauthStep) this.oauthStep.classList.remove('hidden');
+            if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
+            if (this.oauthStatus) this.oauthStatus.classList.add('hidden');
+            if (titleEl) titleEl.textContent = 'Link Lichess Account';
+        } else if (platform === 'chesscom') {
+            // Show Chess.com username input step
+            if (this.oauthStep) this.oauthStep.classList.add('hidden');
+            if (this.chesscomStep) this.chesscomStep.classList.remove('hidden');
+            if (this.chesscomStatus) this.chesscomStatus.classList.add('hidden');
+            if (this.chesscomError) this.chesscomError.classList.add('hidden');
+            if (this.chesscomUsernameInput) {
+                this.chesscomUsernameInput.value = '';
+                this.chesscomUsernameInput.focus();
+            }
+            if (titleEl) titleEl.textContent = 'Add Chess.com Account';
+        }
+    }
+
+    async submitChesscomAccount() {
+        if (!this.chesscomUsernameInput) {
+            return;
+        }
+
+        // Clear previous errors
+        if (this.chesscomError) {
+            this.chesscomError.classList.add('hidden');
+            this.chesscomError.textContent = '';
+        }
+
+        // Get and validate username
+        const username = this.chesscomUsernameInput.value.trim();
+        
+        if (!username) {
+            this.showChesscomError('Username cannot be empty.');
+            return;
+        }
+
+        // Validate username format
+        if (username.length < 3 || username.length > 25) {
+            this.showChesscomError('Username must be 3-25 characters.');
+            return;
+        }
+        
+        if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+            this.showChesscomError('Username can only contain letters, numbers, hyphens, and underscores.');
+            return;
+        }
+
+        // Show loading state
+        if (this.chesscomStatus) {
+            this.chesscomStatus.classList.remove('hidden');
+        }
+            if (this.submitChesscomAccountBtn) {
+                this.submitChesscomAccountBtn.disabled = true;
+            }
+
+        try {
+            const response = await ipcRenderer.invoke('api-request', {
+                endpoint: '/auth/chesscom/add',
+                method: 'POST',
+                data: { username: username }
+            });
+
+            if (response.success) {
+                await this.loadAccounts();
+                this.hideAccountModal();
+                // Show success message (you can replace with a toast if you have one)
+                alert(`Successfully added Chess.com account: ${username}`);
+            } else {
+                const errorMsg = response.error || response.data?.error || 'Failed to add account';
+                this.showChesscomError(errorMsg);
+            }
+        } catch (error) {
+            console.error('Add Chess.com account error:', error);
+            this.showChesscomError('Failed to add account: ' + error.message);
+        } finally {
+            if (this.chesscomStatus) {
+                this.chesscomStatus.classList.add('hidden');
+            }
+            if (this.submitChesscomAccountBtn) {
+                this.submitChesscomAccountBtn.disabled = false;
+            }
+        }
+    }
+
+    showChesscomError(message) {
+        if (this.chesscomError) {
+            this.chesscomError.textContent = message;
+            this.chesscomError.classList.remove('hidden');
+        }
     }
 
     hideAccountModal() {
         this.accountModal.classList.add('hidden');
         this.pendingOAuth = null;
+        // Reset to platform selection step
+        if (this.platformSelectionStep) this.platformSelectionStep.classList.remove('hidden');
+        if (this.oauthStep) this.oauthStep.classList.add('hidden');
+        if (this.chesscomStep) this.chesscomStep.classList.add('hidden');
     }
 
     async startOAuthFlow() {
@@ -354,30 +513,44 @@ class ChessQLApp {
         this.accountsList.querySelectorAll('.sync-btn.primary').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.startSync(username);
+                const platform = btn.dataset.platform || 'lichess';
+                const endpoint = btn.dataset.endpoint || '/sync/start';
+                this.startSync(username, false, platform, endpoint);
             });
         });
 
         this.accountsList.querySelectorAll('.sync-btn.secondary').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.startFullSync(username);
+                const platform = btn.dataset.platform || 'lichess';
+                const endpoint = btn.dataset.endpoint || '/sync/start';
+                this.startFullSync(username, platform, endpoint);
             });
         });
 
         this.accountsList.querySelectorAll('.account-action-btn.delete').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.deleteAccount(username);
+                const platform = btn.dataset.platform || 'lichess';
+                this.deleteAccount(username, platform);
             });
         });
 
         this.accountsList.querySelectorAll('.account-action-btn.refresh').forEach(btn => {
             btn.addEventListener('click', () => {
                 const username = btn.dataset.username;
-                this.refreshAccountStatus(username);
+                const platform = btn.dataset.platform || 'lichess';
+                this.refreshAccountStatus(username, platform);
             });
         });
+    }
+
+    getPlatformInfo(platform) {
+        const platforms = {
+            'lichess': { name: 'Lichess', icon: '♞', color: '#4CAF50', class: 'lichess' },
+            'chesscom': { name: 'Chess.com', icon: '♟', color: '#7FA650', class: 'chesscom' }
+        };
+        return platforms[platform] || { name: platform || 'Unknown', icon: '?', color: '#999', class: 'unknown' };
     }
 
     createAccountCard(account) {
@@ -386,14 +559,22 @@ class ChessQLApp {
             : 'Never';
         const gamesCount = account.games_count || 0;
         const initial = (account.username || 'U')[0].toUpperCase();
+        const platform = account.platform || 'lichess'; // Default to lichess for backward compatibility
+        const platformInfo = this.getPlatformInfo(platform);
+        const syncEndpoint = platform === 'chesscom' ? '/sync/chesscom/start' : '/sync/start';
         
         return `
-            <div class="account-card" data-username="${account.username}">
+            <div class="account-card" data-username="${account.username}" data-platform="${platform}">
                 <div class="account-card-header">
                     <div class="account-info">
                         <div class="account-avatar">${initial}</div>
                         <div class="account-details">
-                            <span class="account-username">${account.username}</span>
+                            <div class="account-username-row">
+                                <span class="account-username">${account.username}</span>
+                                <span class="platform-badge platform-${platformInfo.class}" title="${platformInfo.name}">
+                                    ${platformInfo.icon}
+                                </span>
+                            </div>
                             <span class="account-status">
                                 <span class="status-dot"></span>
                                 Connected
@@ -401,10 +582,10 @@ class ChessQLApp {
                         </div>
                     </div>
                     <div class="account-actions">
-                        <button class="account-action-btn refresh" data-username="${account.username}" title="Refresh status">
+                        <button class="account-action-btn refresh" data-username="${account.username}" data-platform="${platform}" title="Refresh status">
                             🔄
                         </button>
-                        <button class="account-action-btn delete" data-username="${account.username}" title="Remove account">
+                        <button class="account-action-btn delete" data-username="${account.username}" data-platform="${platform}" title="Remove account">
                             🗑️
                         </button>
                     </div>
@@ -419,15 +600,15 @@ class ChessQLApp {
                         <div class="stat-label">Last Sync</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value">✓</div>
-                        <div class="stat-label">Status</div>
+                        <div class="stat-value">${platformInfo.icon}</div>
+                        <div class="stat-label">${platformInfo.name}</div>
                     </div>
                 </div>
                 <div class="account-sync-section">
-                    <button class="sync-btn primary" data-username="${account.username}">
+                    <button class="sync-btn primary" data-username="${account.username}" data-platform="${platform}" data-endpoint="${syncEndpoint}">
                         🔄 Sync New Games
                     </button>
-                    <button class="sync-btn secondary" data-username="${account.username}">
+                    <button class="sync-btn secondary" data-username="${account.username}" data-platform="${platform}" data-endpoint="${syncEndpoint}">
                         Full Sync
                     </button>
                 </div>
@@ -435,17 +616,18 @@ class ChessQLApp {
         `;
     }
 
-    async startSync(username, fullSync = false) {
+    async startSync(username, fullSync = false, platform = 'lichess', endpoint = '/sync/start') {
         try {
+            const syncEndpoint = endpoint || (platform === 'chesscom' ? '/sync/chesscom/start' : '/sync/start');
             const response = await ipcRenderer.invoke('api-request', {
-                endpoint: `/sync/start/${username}`,
+                endpoint: `${syncEndpoint}/${username}`,
                 method: 'POST',
                 data: { full_sync: fullSync }
             });
 
             if (response.success) {
                 this.showSyncToast(username);
-                this.startSyncPolling(username);
+                this.startSyncPolling(username, platform);
             } else {
                 throw new Error(response.error || 'Failed to start sync');
             }
@@ -455,9 +637,9 @@ class ChessQLApp {
         }
     }
 
-    startFullSync(username) {
+    startFullSync(username, platform = 'lichess', endpoint = '/sync/start') {
         if (confirm(`This will re-sync all games for ${username}. This may take a while. Continue?`)) {
-            this.startSync(username, true);
+            this.startSync(username, true, platform, endpoint);
         }
     }
 
@@ -474,17 +656,20 @@ class ChessQLApp {
         this.syncToast.classList.add('hidden');
     }
 
-    startSyncPolling(username) {
+    startSyncPolling(username, platform = 'lichess') {
         // Clear any existing interval
         if (this.syncIntervals[username]) {
             clearInterval(this.syncIntervals[username]);
         }
 
+        // Determine status endpoint based on platform
+        const statusEndpoint = platform === 'chesscom' ? `/sync/chesscom/status/${username}` : `/sync/status/${username}`;
+
         // Poll every 1 second
         this.syncIntervals[username] = setInterval(async () => {
             try {
                 const response = await ipcRenderer.invoke('api-request', {
-                    endpoint: `/sync/status/${username}`,
+                    endpoint: statusEndpoint,
                     method: 'GET'
                 });
 
@@ -629,14 +814,18 @@ class ChessQLApp {
                 limit: this.backendPageSize, 
                 page_no: page, 
                 offset: offset,
-                reference_player: selectedAccount  // Pass selected account for context
+                account_id: selectedAccount ? selectedAccount.id : null,
+                reference_player: selectedAccount ? selectedAccount.username : null,  // For "I", "my" context
+                platform: selectedAccount ? selectedAccount.platform : null  // For platform filtering
             }
             : { 
                 query: query, 
                 limit: this.backendPageSize, 
                 page_no: page, 
                 offset: offset,
-                reference_player: selectedAccount  // Pass selected account for filtering
+                account_id: selectedAccount ? selectedAccount.id : null,
+                reference_player: selectedAccount ? selectedAccount.username : null,  // For ChessQL patterns
+                platform: selectedAccount ? selectedAccount.platform : null  // For platform filtering
             };
 
         const response = await ipcRenderer.invoke('api-request', {
@@ -828,6 +1017,25 @@ class ChessQLApp {
         this.resultsContainer.appendChild(paginationDiv);
     }
 
+    detectGamePlatform(game) {
+        // Detect platform from site URL or game ID fields
+        if (game.site) {
+            if (game.site.includes('lichess.org')) {
+                return 'lichess';
+            } else if (game.site.includes('chess.com')) {
+                return 'chesscom';
+            }
+        }
+        // Check for ID fields
+        if (game.lichess_id) {
+            return 'lichess';
+        }
+        if (game.chesscom_id) {
+            return 'chesscom';
+        }
+        return null;
+    }
+
     createGameCard(game, index) {
         const card = document.createElement('div');
         card.className = 'game-card';
@@ -835,6 +1043,17 @@ class ChessQLApp {
 
         const thumbnail = document.createElement('div');
         thumbnail.className = 'game-thumbnail';
+        
+        // Detect and add platform badge
+        const platform = this.detectGamePlatform(game);
+        if (platform) {
+            const platformInfo = this.getPlatformInfo(platform);
+            const platformBadge = document.createElement('div');
+            platformBadge.className = `platform-badge-overlay platform-${platformInfo.class}`;
+            platformBadge.innerHTML = `<span class="platform-icon">${platformInfo.icon}</span><span class="platform-text">${platformInfo.name}</span>`;
+            platformBadge.title = platformInfo.name;
+            thumbnail.appendChild(platformBadge);
+        }
         
         // Add speed badge overlay if speed is available (collapsible)
         if (game.speed) {
