@@ -1,0 +1,9 @@
+# Testing suite dependencies
+# Most dependencies are already in the main project requirements.txt
+# This file is for any additional testing-specific dependencies
+
+# No additional dependencies needed at this time
+# The testing suite uses:
+# - Standard library (json, pathlib, dataclasses, etc.)
+# - Project modules (natural_language_search, query_language, etc.)
+
