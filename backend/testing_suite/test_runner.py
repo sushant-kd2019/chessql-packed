@@ -6,6 +6,7 @@ Executes test cases and compares results with baseline truth.
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -128,14 +129,18 @@ class TestRunner:
                 continue
             
             test_case.expected_cql = expected_cql
+            baseline_latency_ms = baseline_tc.get("latency_ms")
             
-            # Generate actual CQL
+            # Generate actual CQL with latency measurement
             try:
+                start_time = time.time()
                 actual_cql = self.nl_search._convert_to_sql(
                     test_case.natural_language,
                     reference_player=test_case.reference_player or self.config.reference_player,
                     platform=test_case.platform
                 )
+                end_time = time.time()
+                test_case.latency_ms = (end_time - start_time) * 1000  # Convert to milliseconds
                 
                 if not actual_cql:
                     test_case.status = TestCaseStatus.ERROR
@@ -151,14 +156,25 @@ class TestRunner:
                 comparison = self.comparator.compare(expected_cql, actual_cql)
                 test_case.comparison_details = comparison
                 
+                # Add latency comparison if baseline latency exists
+                latency_info = f"{test_case.latency_ms:.1f}ms"
+                if baseline_latency_ms is not None:
+                    latency_diff = test_case.latency_ms - baseline_latency_ms
+                    latency_pct = (latency_diff / baseline_latency_ms * 100) if baseline_latency_ms > 0 else 0
+                    if latency_diff > 0:
+                        latency_info += f" (+{latency_diff:.1f}ms, +{latency_pct:.1f}%)"
+                    else:
+                        latency_info += f" ({latency_diff:.1f}ms, {latency_pct:.1f}%)"
+                    latency_info += f" [baseline: {baseline_latency_ms:.1f}ms]"
+                
                 if comparison["equal"]:
                     test_case.status = TestCaseStatus.PASSED
                     passed += 1
-                    print(f"  ✓ PASSED")
+                    print(f"  ✓ PASSED ({latency_info})")
                 else:
                     test_case.status = TestCaseStatus.FAILED
                     failed += 1
-                    print(f"  ✗ FAILED")
+                    print(f"  ✗ FAILED ({latency_info})")
                     print(f"    Expected: {expected_cql[:80]}...")
                     print(f"    Actual:   {actual_cql[:80]}...")
             
@@ -171,14 +187,28 @@ class TestRunner:
             results["test_cases"].append(test_case.to_dict())
             print()
         
-        # Summary
+        # Summary with latency statistics
         total = len(all_cases)
+        latencies = [tc.latency_ms for tc in all_cases if tc.latency_ms is not None]
+        
+        latency_stats = {}
+        if latencies:
+            latency_stats = {
+                "min_ms": min(latencies),
+                "max_ms": max(latencies),
+                "avg_ms": sum(latencies) / len(latencies),
+                "median_ms": sorted(latencies)[len(latencies) // 2] if latencies else None,
+                "total_ms": sum(latencies),
+                "count": len(latencies)
+            }
+        
         results["summary"] = {
             "total": total,
             "passed": passed,
             "failed": failed,
             "errors": errors,
-            "pass_rate": (passed / total * 100) if total > 0 else 0
+            "pass_rate": (passed / total * 100) if total > 0 else 0,
+            "latency": latency_stats
         }
         
         print("-" * 50)
@@ -187,6 +217,13 @@ class TestRunner:
         print(f"  Passed: {passed} ({results['summary']['pass_rate']:.1f}%)")
         print(f"  Failed: {failed}")
         print(f"  Errors: {errors}")
+        if latency_stats:
+            print(f"\nLatency Statistics:")
+            print(f"  Min:    {latency_stats['min_ms']:.1f}ms")
+            print(f"  Max:    {latency_stats['max_ms']:.1f}ms")
+            print(f"  Avg:    {latency_stats['avg_ms']:.1f}ms")
+            print(f"  Median: {latency_stats['median_ms']:.1f}ms")
+            print(f"  Total:  {latency_stats['total_ms']:.1f}ms")
         print("-" * 50)
         
         return results

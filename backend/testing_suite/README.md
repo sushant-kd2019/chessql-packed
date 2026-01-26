@@ -8,6 +8,7 @@ This testing suite validates the accuracy of natural language to CQL (Chess Quer
 - **Feature Coverage**: Test all supported features individually and in combination
 - **Baseline Truth**: Generate and maintain expected CQL queries using current system
 - **Comparison**: Compare CQL queries accounting for ordering and spacing differences
+- **Latency Testing**: Measure and compare query generation latency (useful when switching from OpenAI to local LLMs)
 
 ## Structure
 
@@ -157,6 +158,23 @@ The CQL comparator handles:
 - Different ordering of SELECT columns
 - Case insensitivity
 - Equivalent SQL structures
+
+## Latency Testing
+
+The testing suite measures latency for each query generation:
+
+- **Baseline Latency**: Recorded when generating baseline truth
+- **Current Latency**: Measured during test execution
+- **Comparison**: Shows latency difference and percentage change
+- **Statistics**: Min, max, average, median, and total latency
+
+This is particularly useful when:
+- Switching from OpenAI API to locally deployed LLMs
+- Comparing different model configurations
+- Monitoring performance regressions
+- Optimizing query generation speed
+
+Latency is measured in milliseconds (ms) and includes the full time to convert natural language to CQL.
 
 ## Development
 

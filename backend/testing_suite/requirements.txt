@@ -2,8 +2,19 @@
 # Most dependencies are already in the main project requirements.txt
 # This file is for any additional testing-specific dependencies
 
-# No additional dependencies needed at this time
-# The testing suite uses:
-# - Standard library (json, pathlib, dataclasses, etc.)
-# - Project modules (natural_language_search, query_language, etc.)
+# Required dependencies (install from main project requirements.txt):
+# - click>=8.1.7 (for CLI interface)
+# - openai>=1.109.1 (for natural language search)
+# - python-dotenv>=1.0.0 (for environment variable management)
+
+# Standard library modules used (no installation needed):
+# - json, sys, time, pathlib, typing, datetime, dataclasses, enum, re, os
+
+# Project modules used (from backend/):
+# - natural_language_search
+# - query_language
+# - database
+
+# Note: Install main project dependencies first:
+#   pip install -r ../requirements.txt
 

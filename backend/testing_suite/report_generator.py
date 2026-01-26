@@ -42,6 +42,17 @@ def generate_text_report(results: Dict[str, Any]) -> str:
     lines.append(f"  Pass rate:    {summary.get('pass_rate', 0):.1f}%")
     lines.append("")
     
+    # Latency statistics
+    latency = summary.get("latency", {})
+    if latency:
+        lines.append("Latency Statistics:")
+        lines.append(f"  Min:    {latency.get('min_ms', 0):.1f}ms")
+        lines.append(f"  Max:    {latency.get('max_ms', 0):.1f}ms")
+        lines.append(f"  Avg:    {latency.get('avg_ms', 0):.1f}ms")
+        lines.append(f"  Median: {latency.get('median_ms', 0):.1f}ms")
+        lines.append(f"  Total:  {latency.get('total_ms', 0):.1f}ms")
+        lines.append("")
+    
     # Test run info
     lines.append("Test Run Information:")
     lines.append(f"  Run at:              {results.get('run_at', 'unknown')}")
@@ -64,6 +75,9 @@ def generate_text_report(results: Dict[str, Any]) -> str:
         for i, tc in enumerate(failed_tests, 1):
             lines.append(f"{i}. {tc.get('id')}")
             lines.append(f"   Natural Language: {tc.get('natural_language')}")
+            latency_ms = tc.get('latency_ms')
+            if latency_ms is not None:
+                lines.append(f"   Latency:         {latency_ms:.1f}ms")
             lines.append(f"   Expected CQL:     {tc.get('expected_cql', 'N/A')}")
             lines.append(f"   Actual CQL:       {tc.get('actual_cql', 'N/A')}")
             
@@ -268,7 +282,37 @@ def generate_html_report(results: Dict[str, Any]) -> str:
                 <div class="value" style="color: {status_color};">{pass_rate:.1f}%</div>
             </div>
         </div>
-        
+"""
+    
+    # Add latency statistics card if available
+    latency = summary.get("latency", {})
+    if latency:
+        html += f"""
+        <div class="summary">
+            <div class="summary-card">
+                <h3>Min Latency</h3>
+                <div class="value">{latency.get('min_ms', 0):.1f}ms</div>
+            </div>
+            <div class="summary-card">
+                <h3>Max Latency</h3>
+                <div class="value">{latency.get('max_ms', 0):.1f}ms</div>
+            </div>
+            <div class="summary-card">
+                <h3>Avg Latency</h3>
+                <div class="value">{latency.get('avg_ms', 0):.1f}ms</div>
+            </div>
+            <div class="summary-card">
+                <h3>Median Latency</h3>
+                <div class="value">{latency.get('median_ms', 0):.1f}ms</div>
+            </div>
+            <div class="summary-card">
+                <h3>Total Time</h3>
+                <div class="value">{latency.get('total_ms', 0):.1f}ms</div>
+            </div>
+        </div>
+"""
+    
+    html += f"""
         <div class="section">
             <h2>Test Information</h2>
             <p><strong>Run at:</strong> {results.get('run_at', 'unknown')}</p>
@@ -293,7 +337,11 @@ def generate_html_report(results: Dict[str, Any]) -> str:
             <div class="test-case failed">
                 <div class="test-id">{tc.get('id')}</div>
                 <div class="nl-query">{tc.get('natural_language')}</div>
-                <div><strong>Expected:</strong></div>
+"""
+            latency_ms = tc.get('latency_ms')
+            if latency_ms is not None:
+                html += f"                <div><strong>Latency:</strong> {latency_ms:.1f}ms</div>\n"
+            html += f"""                <div><strong>Expected:</strong></div>
                 <div class="cql-query">{tc.get('expected_cql', 'N/A')}</div>
                 <div><strong>Actual:</strong></div>
                 <div class="cql-query">{tc.get('actual_cql', 'N/A')}</div>

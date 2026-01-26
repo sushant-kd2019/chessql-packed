@@ -40,10 +40,11 @@ class TestCase:
     status: TestCaseStatus = TestCaseStatus.PENDING
     error_message: Optional[str] = None
     comparison_details: Optional[Dict[str, Any]] = None
+    latency_ms: Optional[float] = None  # Latency in milliseconds
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        result = {
             "id": self.id,
             "natural_language": self.natural_language,
             "expected_cql": self.expected_cql,
@@ -54,6 +55,18 @@ class TestCase:
             "platform": self.platform,
             "account_id": self.account_id,
         }
+        # Include runtime fields if they exist
+        if self.actual_cql is not None:
+            result["actual_cql"] = self.actual_cql
+        if self.status != TestCaseStatus.PENDING:
+            result["status"] = self.status.value
+        if self.error_message:
+            result["error_message"] = self.error_message
+        if self.comparison_details:
+            result["comparison_details"] = self.comparison_details
+        if self.latency_ms is not None:
+            result["latency_ms"] = self.latency_ms
+        return result
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TestCase":

@@ -7,6 +7,7 @@ This serves as the "gold standard" for future comparisons.
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -82,19 +83,21 @@ def generate_baseline(config: TestConfig) -> Dict[str, Any]:
         print(f"  NL: {test_case.natural_language}")
         
         try:
-            # Convert to CQL (this calls the _convert_to_sql method internally)
-            # We need to call it without executing the query
+            # Convert to CQL with latency measurement
+            start_time = time.time()
             cql_query = nl_search._convert_to_sql(
                 test_case.natural_language,
                 reference_player=test_case.reference_player or config.reference_player,
                 platform=test_case.platform
             )
+            end_time = time.time()
+            test_case.latency_ms = (end_time - start_time) * 1000  # Convert to milliseconds
             
             if cql_query:
                 test_case.expected_cql = cql_query
                 test_case.status = TestCaseStatus.PASSED
                 success_count += 1
-                print(f"  ✓ Generated CQL: {cql_query[:100]}...")
+                print(f"  ✓ Generated CQL: {cql_query[:100]}... ({test_case.latency_ms:.1f}ms)")
             else:
                 test_case.status = TestCaseStatus.ERROR
                 test_case.error_message = "Failed to generate CQL query"
@@ -111,11 +114,25 @@ def generate_baseline(config: TestConfig) -> Dict[str, Any]:
         baseline_data["test_cases"].append(test_case.to_dict())
         print()
     
+    # Calculate latency statistics
+    latencies = [tc.latency_ms for tc in all_cases if tc.latency_ms is not None]
+    latency_stats = {}
+    if latencies:
+        latency_stats = {
+            "min_ms": min(latencies),
+            "max_ms": max(latencies),
+            "avg_ms": sum(latencies) / len(latencies),
+            "median_ms": sorted(latencies)[len(latencies) // 2] if latencies else None,
+            "total_ms": sum(latencies),
+            "count": len(latencies)
+        }
+    
     baseline_data["summary"] = {
         "total": len(all_cases),
         "success": success_count,
         "errors": error_count,
-        "success_rate": (success_count / len(all_cases) * 100) if all_cases else 0
+        "success_rate": (success_count / len(all_cases) * 100) if all_cases else 0,
+        "latency": latency_stats
     }
     
     print("-" * 50)
@@ -124,6 +141,13 @@ def generate_baseline(config: TestConfig) -> Dict[str, Any]:
     print(f"  Success: {success_count}")
     print(f"  Errors: {error_count}")
     print(f"  Success rate: {baseline_data['summary']['success_rate']:.1f}%")
+    if latency_stats:
+        print(f"\nLatency Statistics:")
+        print(f"  Min:    {latency_stats['min_ms']:.1f}ms")
+        print(f"  Max:    {latency_stats['max_ms']:.1f}ms")
+        print(f"  Avg:    {latency_stats['avg_ms']:.1f}ms")
+        print(f"  Median: {latency_stats['median_ms']:.1f}ms")
+        print(f"  Total:  {latency_stats['total_ms']:.1f}ms")
     
     return baseline_data
 
