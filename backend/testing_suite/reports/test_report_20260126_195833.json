@@ -1,0 +1,729 @@
+{
+  "run_at": "2026-01-26T19:57:41.610796",
+  "baseline_generated_at": "2026-01-26T19:51:03.181417",
+  "reference_player": "lecorvus",
+  "test_cases": [
+    {
+      "id": "player_results_001",
+      "natural_language": "Show me games where lecorvus won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won)",
+      "feature_names": [
+        "Player Results (won/lost/drew)"
+      ],
+      "test_type": "individual",
+      "description": "Basic player win query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "player_results_002",
+      "natural_language": "Find games where lecorvus lost",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus lost)",
+      "feature_names": [
+        "Player Results (won/lost/drew)"
+      ],
+      "test_type": "individual",
+      "description": "Basic player loss query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "piece_sacrifices_001",
+      "natural_language": "Show me games where queen was sacrificed",
+      "expected_cql": "SELECT * FROM games WHERE (queen sacrificed)",
+      "feature_names": [
+        "Piece Sacrifices"
+      ],
+      "test_type": "individual",
+      "description": "Queen sacrifice query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "piece_sacrifices_002",
+      "natural_language": "Find games where knight was sacrificed",
+      "expected_cql": "SELECT * FROM games WHERE (knight sacrificed)",
+      "feature_names": [
+        "Piece Sacrifices"
+      ],
+      "test_type": "individual",
+      "description": "Knight sacrifice query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "piece_exchanges_001",
+      "natural_language": "Find games with queen exchanges",
+      "expected_cql": "SELECT * FROM games WHERE (queen exchanged)",
+      "feature_names": [
+        "Piece Exchanges"
+      ],
+      "test_type": "individual",
+      "description": "Queen exchange query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "piece_exchanges_002",
+      "natural_language": "Show games where pawns were exchanged",
+      "expected_cql": "SELECT * FROM games WHERE (pawn exchanged)",
+      "feature_names": [
+        "Piece Exchanges"
+      ],
+      "test_type": "individual",
+      "description": "Pawn exchange query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "captures_001",
+      "natural_language": "Show games where knight captured rook",
+      "expected_cql": "SELECT * FROM games WHERE (knight captured rook)",
+      "feature_names": [
+        "Captures"
+      ],
+      "test_type": "individual",
+      "description": "Knight captures rook query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "captures_002",
+      "natural_language": "Find games where bishop captured queen",
+      "expected_cql": "SELECT * FROM games WHERE (bishop captured queen)",
+      "feature_names": [
+        "Captures"
+      ],
+      "test_type": "individual",
+      "description": "Bishop captures queen query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "pawn_promotions_001",
+      "natural_language": "Find games where pawn was promoted to queen",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen)",
+      "feature_names": [
+        "Pawn Promotions"
+      ],
+      "test_type": "individual",
+      "description": "Basic pawn promotion to queen",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "pawn_promotions_002",
+      "natural_language": "Show games with pawn promoted to queen x 2",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND (pawn promoted to queen)",
+      "feature_names": [
+        "Pawn Promotions"
+      ],
+      "test_type": "individual",
+      "description": "Multiple pawn promotions",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "move_timing_001",
+      "natural_language": "Find pawn exchanges before move 10",
+      "expected_cql": "SELECT * FROM games WHERE (pawn exchanged before move 10)",
+      "feature_names": [
+        "Move Timing"
+      ],
+      "test_type": "individual",
+      "description": "Early move timing condition",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "move_timing_002",
+      "natural_language": "Show queen sacrifices after move 20",
+      "expected_cql": "SELECT * FROM games WHERE (queen sacrificed) AND (move_number > 20)",
+      "feature_names": [
+        "Move Timing"
+      ],
+      "test_type": "individual",
+      "description": "Late move timing condition",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "elo_rating_001",
+      "natural_language": "Games where lecorvus was rated over 1500",
+      "expected_cql": "SELECT * FROM games WHERE ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) > 1500))",
+      "feature_names": [
+        "ELO Rating Queries"
+      ],
+      "test_type": "individual",
+      "description": "ELO rating above threshold",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "elo_rating_002",
+      "natural_language": "Find games where lecorvus was rated under 1200",
+      "expected_cql": "SELECT * FROM games WHERE ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) < 1200) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) < 1200))",
+      "feature_names": [
+        "ELO Rating Queries"
+      ],
+      "test_type": "individual",
+      "description": "ELO rating below threshold",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "time_control_001",
+      "natural_language": "Show lecorvus blitz games",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won OR lecorvus lost OR lecorvus drew) AND speed = 'blitz'",
+      "feature_names": [
+        "Time Control/Speed"
+      ],
+      "test_type": "individual",
+      "description": "Blitz time control query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "time_control_002",
+      "natural_language": "How many bullet games did lecorvus win",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus won) AND speed = 'bullet'",
+      "feature_names": [
+        "Time Control/Speed"
+      ],
+      "test_type": "individual",
+      "description": "Bullet time control with count",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "variant_001",
+      "natural_language": "Show lecorvus chess960 games",
+      "expected_cql": "SELECT * FROM games WHERE (white_player = 'lecorvus' OR black_player = 'lecorvus') AND variant = 'chess960'",
+      "feature_names": [
+        "Variant"
+      ],
+      "test_type": "individual",
+      "description": "Chess960 variant query",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "variant_002",
+      "natural_language": "How many standard games has lecorvus won",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus won) AND variant = 'standard'",
+      "feature_names": [
+        "Variant"
+      ],
+      "test_type": "individual",
+      "description": "Standard variant with count",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "sorting_001",
+      "natural_language": "Show games sorted by ELO rating",
+      "expected_cql": "SELECT * FROM games ORDER BY CAST(white_elo AS INTEGER) DESC",
+      "feature_names": [
+        "Sorting"
+      ],
+      "test_type": "individual",
+      "description": "Sort by ELO rating",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "sorting_002",
+      "natural_language": "Find most recent games",
+      "expected_cql": "SELECT * FROM games ORDER BY date_played DESC",
+      "feature_names": [
+        "Sorting"
+      ],
+      "test_type": "individual",
+      "description": "Sort by date",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "counting_001",
+      "natural_language": "How many games did lecorvus win",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus won)",
+      "feature_names": [
+        "Counting"
+      ],
+      "test_type": "individual",
+      "description": "Count wins",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "counting_002",
+      "natural_language": "Count games where queen was sacrificed",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (queen sacrificed)",
+      "feature_names": [
+        "Counting"
+      ],
+      "test_type": "individual",
+      "description": "Count sacrifices",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "grouping_001",
+      "natural_language": "Show games by speed category",
+      "expected_cql": "SELECT speed, COUNT(*) as count FROM games GROUP BY speed",
+      "feature_names": [
+        "Grouping"
+      ],
+      "test_type": "individual",
+      "description": "Group by speed",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "grouping_002",
+      "natural_language": "Show games by variant",
+      "expected_cql": "SELECT variant, COUNT(*) as count FROM games GROUP BY variant",
+      "feature_names": [
+        "Grouping"
+      ],
+      "test_type": "individual",
+      "description": "Group by variant",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_001",
+      "natural_language": "Games where lecorvus sacrificed a queen and won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (lecorvus queen sacrificed)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices"
+      ],
+      "test_type": "combined",
+      "description": "Win with queen sacrifice",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_002",
+      "natural_language": "Show games where lecorvus lost after sacrificing a knight",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus lost) AND (knight sacrificed)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices"
+      ],
+      "test_type": "combined",
+      "description": "Loss with knight sacrifice",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_003",
+      "natural_language": "Find games where lecorvus won and pawn was exchanged",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn exchanged)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Exchanges"
+      ],
+      "test_type": "combined",
+      "description": "Win with pawn exchange",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_004",
+      "natural_language": "Games where lecorvus drew with queen exchanges",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus drew) AND (queen exchanged)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Exchanges"
+      ],
+      "test_type": "combined",
+      "description": "Draw with queen exchange",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_005",
+      "natural_language": "Find games where lecorvus promoted pawn to queen and won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions"
+      ],
+      "test_type": "combined",
+      "description": "Win with pawn promotion",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_006",
+      "natural_language": "Show games where lecorvus won and promoted to queen twice",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND (pawn promoted to queen)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions"
+      ],
+      "test_type": "combined",
+      "description": "Win with multiple promotions",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_007",
+      "natural_language": "How many bullet games did lecorvus win",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus won) AND speed = 'bullet'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Time Control/Speed",
+        "Counting"
+      ],
+      "test_type": "combined",
+      "description": "Count wins in bullet",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_008",
+      "natural_language": "Find lecorvus rapid losses",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus lost) AND speed = 'rapid'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Losses in rapid",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_009",
+      "natural_language": "Games where lecorvus was rated over 1500 and won",
+      "expected_cql": "SELECT * FROM games WHERE ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) > 1500)) AND (lecorvus won)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "ELO Rating Queries"
+      ],
+      "test_type": "combined",
+      "description": "Win with high rating",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_010",
+      "natural_language": "Count games where lecorvus lost when rated over 1500",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus lost) AND ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) > 1500))",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "ELO Rating Queries",
+        "Counting"
+      ],
+      "test_type": "combined",
+      "description": "Count losses with high rating",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_011",
+      "natural_language": "lecorvus classical games where queen was sacrificed",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won OR lecorvus lost OR lecorvus drew) AND speed = 'classical' AND (queen sacrificed)",
+      "feature_names": [
+        "Piece Sacrifices",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Queen sacrifice in classical",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_012",
+      "natural_language": "Show blitz games where lecorvus sacrificed a knight",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus knight sacrificed) AND speed = 'blitz'",
+      "feature_names": [
+        "Piece Sacrifices",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Knight sacrifice in blitz",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_013",
+      "natural_language": "Show chess960 games where queen was sacrificed",
+      "expected_cql": "SELECT * FROM games WHERE (queen sacrificed) AND variant = 'chess960'",
+      "feature_names": [
+        "Piece Sacrifices",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Queen sacrifice in chess960",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_014",
+      "natural_language": "Standard games where lecorvus sacrificed a rook",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus rook sacrificed) AND variant = 'standard'",
+      "feature_names": [
+        "Piece Sacrifices",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Rook sacrifice in standard",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_015",
+      "natural_language": "Find games where pawn was promoted to queen x 2",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND (pawn promoted to queen)",
+      "feature_names": [
+        "Pawn Promotions"
+      ],
+      "test_type": "combined",
+      "description": "Multiple queen promotions",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_016",
+      "natural_language": "Show games with pawn promoted to knight x 2",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to knight) AND (pawn promoted to knight)",
+      "feature_names": [
+        "Pawn Promotions"
+      ],
+      "test_type": "combined",
+      "description": "Multiple knight promotions",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_017",
+      "natural_language": "Standard blitz games lecorvus won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND variant = 'standard' AND speed = 'blitz'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Time Control/Speed",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Win in standard blitz",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_018",
+      "natural_language": "Show chess960 rapid games",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won OR lecorvus lost OR lecorvus drew) AND variant = 'chess960' AND speed = 'rapid'",
+      "feature_names": [
+        "Time Control/Speed",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Chess960 rapid games",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_019",
+      "natural_language": "My classical games where I sacrificed a queen and won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND speed = 'classical' AND (queen sacrificed)",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Win with queen sacrifice in classical",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_020",
+      "natural_language": "Show blitz games where lecorvus lost after sacrificing a bishop",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus lost) AND (bishop sacrificed) AND speed = 'blitz'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Loss with bishop sacrifice in blitz",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_021",
+      "natural_language": "My blitz games where I promoted to queen and won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND speed = 'blitz'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Win with promotion in blitz",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_022",
+      "natural_language": "Rapid games where lecorvus won and promoted to queen twice",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND (pawn promoted to queen) AND speed = 'rapid'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "Win with multiple promotions in rapid",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_023",
+      "natural_language": "Blitz games where lecorvus was rated over 1500",
+      "expected_cql": "SELECT * FROM games WHERE ((white_player = 'lecorvus' OR black_player = 'lecorvus') AND CAST(white_elo AS INTEGER) > 1500) AND speed = 'blitz'",
+      "feature_names": [
+        "ELO Rating Queries",
+        "Time Control/Speed"
+      ],
+      "test_type": "combined",
+      "description": "High rating in blitz",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_024",
+      "natural_language": "Count bullet games where lecorvus was rated under 1200",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) < 1200 AND speed = 'bullet') OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) < 1200 AND speed = 'bullet') )",
+      "feature_names": [
+        "ELO Rating Queries",
+        "Time Control/Speed",
+        "Counting"
+      ],
+      "test_type": "combined",
+      "description": "Count low rating bullet games",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_025",
+      "natural_language": "Games where lecorvus sacrificed queen and won when rated over 1500",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (lecorvus queen sacrificed) AND ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) > 1500))",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices",
+        "ELO Rating Queries"
+      ],
+      "test_type": "combined",
+      "description": "Win with queen sacrifice at high rating",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_026",
+      "natural_language": "Count games where lecorvus sacrificed knight and lost when rated over 1500",
+      "expected_cql": "SELECT COUNT(*) FROM games WHERE (lecorvus lost) AND (lecorvus knight sacrificed) AND ((white_player = 'lecorvus' AND CAST(white_elo AS INTEGER) > 1500) OR (black_player = 'lecorvus' AND CAST(black_elo AS INTEGER) > 1500))",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Piece Sacrifices",
+        "ELO Rating Queries",
+        "Counting"
+      ],
+      "test_type": "combined",
+      "description": "Count losses with knight sacrifice at high rating",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_027",
+      "natural_language": "Chess960 games where lecorvus won and promoted to queen",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to queen) AND variant = 'chess960'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Win with promotion in chess960",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    },
+    {
+      "id": "combined_028",
+      "natural_language": "Standard games where lecorvus promoted to knight and won",
+      "expected_cql": "SELECT * FROM games WHERE (lecorvus won) AND (pawn promoted to knight) AND variant = 'standard'",
+      "feature_names": [
+        "Player Results (won/lost/drew)",
+        "Pawn Promotions",
+        "Variant"
+      ],
+      "test_type": "combined",
+      "description": "Win with knight promotion in standard",
+      "reference_player": "lecorvus",
+      "platform": null,
+      "account_id": null
+    }
+  ],
+  "summary": {
+    "total": 52,
+    "passed": 52,
+    "failed": 0,
+    "errors": 0,
+    "pass_rate": 100.0
+  }
+}
